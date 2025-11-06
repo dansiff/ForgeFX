@@ -1,7 +1,7 @@
 # ForgeFX Robot Assessment
 
 ## Overview
-A minimal Unreal Engine5.6 project demonstrating a modular robot arm that can attach/detach, interact highlighting, simple UI status, and automation tests. Code favors C++ for core logic and uses Blueprints for visuals and bindings.
+A Unreal Engine5.6 project demonstrating a modular robot arm that can attach/detach, interact highlighting, simple UI status, and automation tests. Code favors C++ for core logic and uses Blueprints for visuals and bindings.
 
 ## Setup
 - Engine: Unreal Engine5.6
