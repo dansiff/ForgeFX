@@ -11,6 +11,7 @@ class UFloatingPawnMovement;
 class UInputMappingContext;
 class UInputAction;
 class UInteractionTraceComponent;
+class UUserWidget;
 
 UCLASS()
 class FORGEFX_API ARobotDemoPawn : public APawn
@@ -27,36 +28,32 @@ protected:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void Interact(const FInputActionValue& Value);
+	void UpDown(const FInputActionValue& Value);
+	void BoostOn(const FInputActionValue& Value);
+	void BoostOff(const FInputActionValue& Value);
 
 protected:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<USceneComponent> Root;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<USceneComponent> Root;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<USpringArmComponent> SpringArm;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<UCameraComponent> Camera;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<UFloatingPawnMovement> Movement;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<UInteractionTraceComponent> Interaction;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<USpringArmComponent> SpringArm;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputMappingContext> InputContext;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> MoveAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> LookAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> InteractAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> UpDownAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> BoostAction;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<UCameraComponent> Camera;
+	// Speed settings
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BaseMaxSpeed =1200.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BoostMultiplier =2.0f;
+	bool bBoosting = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<UFloatingPawnMovement> Movement;
+	// Crosshair UI (optional)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI") TSubclassOf<UUserWidget> CrosshairWidgetClass;
+	UPROPERTY(Transient) TObjectPtr<UUserWidget> CrosshairWidget;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<UInteractionTraceComponent> Interaction;
-
-	// Enhanced Input
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	TObjectPtr<UInputMappingContext> InputContext;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	TObjectPtr<UInputAction> MoveAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	TObjectPtr<UInputAction> LookAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	TObjectPtr<UInputAction> InteractAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	int32 InputPriority =0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") int32 MappingPriority =0;
 };

@@ -4,9 +4,9 @@
 #include "Pawn/RobotDemoPawn.h"
 #include "Player/RobotDemoPlayerController.h"
 
-AForgeFXGameModeBase::AForgeFXGameModeBase()
+AForgeFXGameModeBase::AForgeFXGameModeBase(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	// Use native classes directly
 	DefaultPawnClass = ARobotDemoPawn::StaticClass();
 	PlayerControllerClass = ARobotDemoPlayerController::StaticClass();
 }

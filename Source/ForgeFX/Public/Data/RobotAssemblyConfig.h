@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/PrimaryDataAsset.h"
+#include "Engine/DataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "NiagaraSystem.h"
 #include "RobotAssemblyConfig.generated.h"
@@ -12,6 +12,9 @@ enum class EHighlightMode : uint8
 	MaterialParameter	UMETA(DisplayName = "Material Parameter"),
 	CustomDepthStencil	UMETA(DisplayName = "Custom Depth / Stencil")
 };
+
+// Forward declare custom detachable part actor class
+class ARobotPartActor;
 
 USTRUCT(BlueprintType)
 struct FORGEFX_API FRobotPartSpec
@@ -41,10 +44,26 @@ struct FORGEFX_API FRobotPartSpec
 	// If true, this part will respond to highlight state changes
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bAffectsHighlight = true;
+
+	// Detach / modular settings
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Detach")
+	bool bDetachable = true;
+
+	// If simulate physics when this part is detached
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Detach", meta=(EditCondition="bDetachable"))
+	bool bSimulatePhysicsWhenDetached = false;
+
+	// Collision profile name to use when detached
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Detach", meta=(EditCondition="bDetachable"))
+	FName DetachedCollisionProfile = TEXT("PhysicsActor");
+
+	// Optional override actor class when detached (must be subclass of ARobotPartActor); if null default class used
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Detach", meta=(EditCondition="bDetachable"))
+	TSubclassOf<ARobotPartActor> DetachedActorClass;
 };
 
 UCLASS(BlueprintType)
-class FORGEFX_API URobotAssemblyConfig : public UPrimaryDataAsset
+class FORGEFX_API URobotAssemblyConfig : public UDataAsset
 {
 	GENERATED_BODY()
 public:

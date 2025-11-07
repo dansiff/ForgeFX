@@ -5,6 +5,10 @@
 #include "Interfaces/Interactable.h"
 #include "InteractionTraceComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHoverComponentChanged, UPrimitiveComponent*, HitComponent, AActor*, HitActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInteractPressedSig, UPrimitiveComponent*, HitComponent, AActor*, HitActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInteractReleasedSig);
+
 /**
  * Simple camera-forward trace that calls IInteractable on hit.
  * Intended for PIE demo without needing a custom controller.
@@ -27,9 +31,20 @@ public:
 
 	// Call to perform interact on current target (bound to input in BP or code)
 	UFUNCTION(BlueprintCallable, Category="Interaction")
-	void Interact();
+	void InteractPressed();
+	UFUNCTION(BlueprintCallable, Category="Interaction")
+	void InteractReleased();
+
+	UPROPERTY(BlueprintAssignable, Category="Interaction")
+	FOnHoverComponentChanged OnHoverComponentChanged;
+	UPROPERTY(BlueprintAssignable, Category="Interaction")
+	FOnInteractPressedSig OnInteractPressed;
+	UPROPERTY(BlueprintAssignable, Category="Interaction")
+	FOnInteractReleasedSig OnInteractReleased;
 
 private:
 	TWeakInterfacePtr<IInteractable> CurrentHover;
-	void UpdateHover(const TWeakInterfacePtr<IInteractable>& NewHover);
+	TWeakObjectPtr<UPrimitiveComponent> CurrentHitComp;
+	void UpdateHover(const TWeakInterfacePtr<IInteractable>& NewHover, UPrimitiveComponent* NewComp, AActor* HitActor);
+	bool bInteractHeld = false;
 };

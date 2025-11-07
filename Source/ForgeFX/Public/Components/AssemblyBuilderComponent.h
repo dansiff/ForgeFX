@@ -7,20 +7,15 @@
 #include "AssemblyBuilderComponent.generated.h"
 
 class UMaterialInstanceDynamic;
+class ARobotPartActor;
 
 USTRUCT()
 struct FORGEFX_API FDynamicMIDArray
 {
 	GENERATED_BODY()
-
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UMaterialInstanceDynamic>> MIDs;
+	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> MIDs;
 };
 
-/**
- * Spawns and attaches mesh components according to a URobotAssemblyConfig.
- * Designed for modular assembly from provided assets.
- */
 UCLASS(ClassGroup=(ForgeFX), meta=(BlueprintSpawnableComponent))
 class FORGEFX_API UAssemblyBuilderComponent : public UActorComponent
 {
@@ -28,42 +23,43 @@ class FORGEFX_API UAssemblyBuilderComponent : public UActorComponent
 public:
 	UAssemblyBuilderComponent();
 
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly")
-	void BuildAssembly();
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void BuildAssembly();
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ClearAssembly();
 
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly")
-	void ClearAssembly();
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalar(float Value);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalarAll(float Value);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalarToParts(const TArray<FName>& PartNames, float Value);
 
-	// Apply highlight scalar to all parts that opt-in (see FRobotPartSpec::bAffectsHighlight)
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly")
-	void ApplyHighlightScalar(float Value);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool SetPartVisibility(FName PartName, bool bVisible);
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetPartWorldLocation(FName PartName, FVector& OutLocation) const;
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") UStaticMeshComponent* GetPartByName(FName PartName) const;
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindPartNameByComponent(const UPrimitiveComponent* Comp, FName& OutName) const;
 
-	// Toggle visibility of a single part by logical name
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly")
-	bool SetPartVisibility(FName PartName, bool bVisible);
+	// Detach / Reattach
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPart(FName PartName, ARobotPartActor*& OutActor);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPart(FName PartName, ARobotPartActor* PartActor);
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsPartDetached(FName PartName) const { return DetachedParts.Contains(PartName); }
 
-	// Query world-space location of a part (for VFX spawn, etc.)
-	UFUNCTION(BlueprintPure, Category="Robot|Assembly")
-	bool GetPartWorldLocation(FName PartName, FVector& OutLocation) const;
+	// Spec helpers
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetPartSpec(FName PartName, FRobotPartSpec& OutSpec) const;
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetAttachParentAndSocket(FName PartName, USceneComponent*& OutParent, FName& OutSocket) const;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly")
-	TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
+	// Blueprint convenience: runtime detach toggles
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForParts(const TArray<FName>& PartNames, bool bEnabled);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForAll(bool bEnabled);
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachEnabled(FName PartName) const;
 
-	// Return named spawned component for BP access
-	UFUNCTION(BlueprintPure, Category="Robot|Assembly")
-	UStaticMeshComponent* GetPartByName(FName PartName) const;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
 
 private:
-	UPROPERTY(Transient)
-	TMap<FName, TObjectPtr<UStaticMeshComponent>> NameToComponent;
-
-	// Cache whether a part participates in highlight operations
-	UPROPERTY(Transient)
-	TMap<FName, bool> PartAffectsHighlight;
-
-	// Cache dynamic material instances for quick parameter updates
-	UPROPERTY(Transient)
-	TMap<TObjectPtr<UStaticMeshComponent>, FDynamicMIDArray> DynamicMIDs;
+	UPROPERTY(Transient) TMap<FName, TObjectPtr<UStaticMeshComponent>> NameToComponent;
+	UPROPERTY(Transient) TMap<TObjectPtr<UStaticMeshComponent>, FName> ComponentToName;
+	UPROPERTY(Transient) TMap<FName, bool> PartAffectsHighlight;
+	UPROPERTY(Transient) TMap<TObjectPtr<UStaticMeshComponent>, FDynamicMIDArray> DynamicMIDs;
+	UPROPERTY(Transient) TMap<FName, TObjectPtr<ARobotPartActor>> DetachedParts;
+	// Runtime override of detach-ability; if missing we fall back to Spec.bDetachable
+	UPROPERTY(Transient) TMap<FName, bool> DetachEnabledOverride;
 
 	void EnsureDynamicMIDs(UStaticMeshComponent* Comp);
+	bool IsDetachableNow(FName PartName) const;
 };

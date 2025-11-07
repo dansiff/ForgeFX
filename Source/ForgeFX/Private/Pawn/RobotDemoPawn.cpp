@@ -5,6 +5,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Components/InteractionTraceComponent.h"
+#include "Blueprint/UserWidget.h"
 
 ARobotDemoPawn::ARobotDemoPawn()
 {
@@ -22,6 +23,9 @@ ARobotDemoPawn::ARobotDemoPawn()
 	Camera->SetupAttachment(SpringArm);
 
 	Movement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("Movement"));
+	Movement->MaxSpeed = BaseMaxSpeed;
+	Movement->Acceleration =4096.f;
+	Movement->Deceleration =4096.f;
 
 	Interaction = CreateDefaultSubobject<UInteractionTraceComponent>(TEXT("Interaction"));
 }
@@ -29,6 +33,15 @@ ARobotDemoPawn::ARobotDemoPawn()
 void ARobotDemoPawn::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (CrosshairWidgetClass)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			CrosshairWidget = CreateWidget<UUserWidget>(PC, CrosshairWidgetClass);
+			if (CrosshairWidget) CrosshairWidget->AddToViewport();
+		}
+	}
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
@@ -38,7 +51,7 @@ void ARobotDemoPawn::BeginPlay()
 			{
 				if (InputContext)
 				{
-					Subsys->AddMappingContext(InputContext, InputPriority);
+					Subsys->AddMappingContext(InputContext, MappingPriority);
 				}
 			}
 		}
@@ -50,17 +63,14 @@ void ARobotDemoPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		if (MoveAction)
+		if (MoveAction) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
+		if (LookAction) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
+		if (InteractAction) EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::Interact);
+		if (UpDownAction) EIC->BindAction(UpDownAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::UpDown);
+		if (BoostAction)
 		{
-			EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
-		}
-		if (LookAction)
-		{
-			EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
-		}
-		if (InteractAction)
-		{
-			EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::Interact);
+			EIC->BindAction(BoostAction, ETriggerEvent::Started, this, &ARobotDemoPawn::BoostOn);
+			EIC->BindAction(BoostAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::BoostOff);
 		}
 	}
 }
@@ -79,10 +89,27 @@ void ARobotDemoPawn::Look(const FInputActionValue& Value)
 	AddControllerPitchInput(Axis.Y);
 }
 
+void ARobotDemoPawn::UpDown(const FInputActionValue& Value)
+{
+	AddMovementInput(FVector::UpVector, Value.Get<float>());
+}
+
+void ARobotDemoPawn::BoostOn(const FInputActionValue& Value)
+{
+	bBoosting = true;
+	Movement->MaxSpeed = BaseMaxSpeed * BoostMultiplier;
+}
+
+void ARobotDemoPawn::BoostOff(const FInputActionValue& Value)
+{
+	bBoosting = false;
+	Movement->MaxSpeed = BaseMaxSpeed;
+}
+
 void ARobotDemoPawn::Interact(const FInputActionValue& Value)
 {
 	if (Interaction)
 	{
-		Interaction->Interact();
+		Interaction->InteractPressed();
 	}
 }
