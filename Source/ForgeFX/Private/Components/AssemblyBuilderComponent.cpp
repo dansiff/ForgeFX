@@ -5,6 +5,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Actors/RobotPartActor.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Engine/SCS_Node.h"
 
 UAssemblyBuilderComponent::UAssemblyBuilderComponent()
 {
@@ -196,4 +197,51 @@ bool UAssemblyBuilderComponent::ReattachPart(FName PartName, ARobotPartActor* Pa
 	Comp->SetHiddenInGame(false); Comp->SetVisibility(true, true);
 	Comp->AttachToComponent(Parent, FAttachmentTransformRules::SnapToTargetIncludingScale, Spec.ParentSocketName);
 	PartActor->Destroy(); DetachedParts.Remove(PartName); return true;
+}
+
+bool UAssemblyBuilderComponent::AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName)
+{
+	if (!PartActor || !NewParent) return false;
+	UStaticMeshComponent* Comp = GetPartByName(PartName);
+	if (!Comp) return false;
+	// Make original component visible and attach to the new parent/socket
+	Comp->SetHiddenInGame(false);
+	Comp->SetVisibility(true, true);
+	Comp->AttachToComponent(NewParent, FAttachmentTransformRules::SnapToTargetIncludingScale, SocketName);
+	// Remove temp actor and record overrides for future operations
+	PartActor->Destroy();
+	DetachedParts.Remove(PartName);
+	ParentOverride.Add(PartName, NewParent);
+	SocketOverride.Add(PartName, SocketName);
+	return true;
+}
+
+bool UAssemblyBuilderComponent::FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const
+{
+	OutParent = nullptr; OutSocket = NAME_None; OutDistance = TNumericLimits<float>::Max();
+	for (const auto& Pair : NameToComponent)
+	{
+		UStaticMeshComponent* Comp = Pair.Value.Get();
+		if (!Comp) continue;
+		// default: allow attaching directly to component origin
+		{
+			const float D = FVector::Dist(AtWorldLocation, Comp->GetComponentLocation());
+			if (D < OutDistance)
+			{
+				OutDistance = D; OutParent = Comp; OutSocket = NAME_None;
+			}
+		}
+		// sockets
+		TArray<FName> Sockets; Comp->GetAllSocketNames(Sockets);
+		for (const FName S : Sockets)
+		{
+			const FTransform T = Comp->GetSocketTransform(S, RTS_World);
+			const float D = FVector::Dist(AtWorldLocation, T.GetLocation());
+			if (D < OutDistance)
+			{
+				OutDistance = D; OutParent = Comp; OutSocket = S;
+			}
+		}
+	}
+	return OutParent != nullptr;
 }

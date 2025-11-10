@@ -130,6 +130,23 @@ bool ARobotActor::TrySnapDraggedPartToSocket()
 	return true;
 }
 
+bool ARobotActor::TryFreeAttachDraggedPart()
+{
+	if (!bAllowFreeAttach || !Assembly || !DraggedPartActor || DraggedPartName.IsNone()) return false;
+	USceneComponent* Parent = nullptr; FName Socket = NAME_None; float Dist=0.f;
+	if (!Assembly->FindNearestAttachTarget(DraggedPartActor->GetActorLocation(), Parent, Socket, Dist)) return false;
+	const float MaxD = (FreeAttachMaxDistance >0.f) ? FreeAttachMaxDistance : AttachPosTolerance;
+	if (Dist > MaxD) return false;
+	const bool bOk = Assembly->AttachDetachedPartTo(DraggedPartName, DraggedPartActor, Parent, Socket);
+	if (bOk)
+	{
+		bDraggingPart = false;
+		DraggedPartActor = nullptr;
+		DraggedPartName = NAME_None;
+	}
+	return bOk;
+}
+
 void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AActor* HitActor)
 {
 	if (!Assembly) return;
@@ -202,6 +219,14 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 void ARobotActor::OnInteractReleased()
 {
 	bDragging = false;
+	if (bDraggingPart)
+	{
+		// Prefer spec snap, otherwise free-attach if allowed
+		if (!TrySnapDraggedPartToSocket())
+		{
+			TryFreeAttachDraggedPart();
+		}
+	}
 	bDraggingPart = false;
 	DraggedPartActor = nullptr;
 	DraggedPartName = NAME_None;

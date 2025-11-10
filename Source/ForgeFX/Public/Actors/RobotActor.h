@@ -59,6 +59,7 @@ protected:
 	// Drag helpers
 	bool ComputeCursorWorldOnPlane(float PlaneZ, FVector& OutWorldPoint) const;
 	bool TrySnapDraggedPartToSocket();
+	bool TryFreeAttachDraggedPart();
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot")
@@ -117,4 +118,12 @@ protected:
 	// Allow moving the whole robot by torso drag
 	UPROPERTY(EditAnywhere, Category="Robot|Attach")
 	bool bAllowTorsoDrag = true;
+
+	// Allow free attach (attach to nearest socket/component on release)
+	UPROPERTY(EditAnywhere, Category="Robot|Attach")
+	bool bAllowFreeAttach = true;
+
+	// Max distance to consider for free attach (cm). If <=0, uses AttachPosTolerance
+	UPROPERTY(EditAnywhere, Category="Robot|Attach")
+	float FreeAttachMaxDistance =25.f;
 };

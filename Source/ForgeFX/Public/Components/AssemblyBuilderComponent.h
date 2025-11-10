@@ -35,7 +35,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") UStaticMeshComponent* GetPartByName(FName PartName) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindPartNameByComponent(const UPrimitiveComponent* Comp, FName& OutName) const;
 
-	// Detach / Reattach
+	// Detach / Reattach (to spec parent)
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPart(FName PartName, ARobotPartActor*& OutActor);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPart(FName PartName, ARobotPartActor* PartActor);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsPartDetached(FName PartName) const { return DetachedParts.Contains(PartName); }
@@ -49,6 +49,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForAll(bool bEnabled);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachEnabled(FName PartName) const;
 
+	// Flexible attach-anywhere helpers
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName);
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
 
 private:
@@ -57,8 +61,10 @@ private:
 	UPROPERTY(Transient) TMap<FName, bool> PartAffectsHighlight;
 	UPROPERTY(Transient) TMap<TObjectPtr<UStaticMeshComponent>, FDynamicMIDArray> DynamicMIDs;
 	UPROPERTY(Transient) TMap<FName, TObjectPtr<ARobotPartActor>> DetachedParts;
-	// Runtime override of detach-ability; if missing we fall back to Spec.bDetachable
 	UPROPERTY(Transient) TMap<FName, bool> DetachEnabledOverride;
+	// Overrides for current parent/socket after free attachment
+	UPROPERTY(Transient) TMap<FName, TWeakObjectPtr<USceneComponent>> ParentOverride;
+	UPROPERTY(Transient) TMap<FName, FName> SocketOverride;
 
 	void EnsureDynamicMIDs(UStaticMeshComponent* Comp);
 	bool IsDetachableNow(FName PartName) const;
