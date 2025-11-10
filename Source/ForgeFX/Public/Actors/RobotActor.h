@@ -33,6 +33,18 @@ class FORGEFX_API ARobotActor : public AActor, public IInteractable
 public:
 	ARobotActor();
 
+	// Debug console helpers
+	UFUNCTION(Exec) void DetachPartByName(const FString& PartName);
+	UFUNCTION(Exec) void ReattachPartByName(const FString& PartName);
+	UFUNCTION(Exec) void ListRobotParts();
+	UFUNCTION(Exec) void TraceTest();
+
+	// Debug accessors for widget
+	UFUNCTION(BlueprintPure, Category="Robot|Debug") FName GetHoveredPart() const { return HoveredPartName; }
+	UFUNCTION(BlueprintPure, Category="Robot|Debug") EDetachInteractMode GetDetachMode() const { return DetachMode; }
+	UFUNCTION(BlueprintPure, Category="Robot|Debug") bool IsDraggingPart() const { return bDraggingPart; }
+	UFUNCTION(BlueprintPure, Category="Robot|Debug") bool IsDraggingRobot() const { return bDragging; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override; // declare OnConstruction
@@ -107,6 +119,12 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> StatusWidget;
 
+	UPROPERTY(EditAnywhere, Category="UI")
+	TSubclassOf<UUserWidget> DebugWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> DebugWidget;
+
 	// Interaction mode selection
 	UPROPERTY(EditAnywhere, Category="Robot|Interact")
 	EDetachInteractMode DetachMode = EDetachInteractMode::HoldToDrag;
@@ -155,4 +173,8 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Robot|Scramble")
 	float ScrambleSocketSearchRadius =30.f;
+
+	// Hover tracking
+	UPROPERTY(Transient)
+	FName HoveredPartName = NAME_None;
 };

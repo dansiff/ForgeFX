@@ -48,11 +48,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const;
-
-	// New: get all current possible attach targets (components)
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") void GetAllAttachTargets(TArray<USceneComponent*>& OutTargets) const;
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachable(FName PartName) const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
+
+protected:
+	bool IsDetachableNow(FName PartName) const;
 
 private:
 	UPROPERTY(Transient) TMap<FName, TObjectPtr<UStaticMeshComponent>> NameToComponent;
@@ -65,5 +67,4 @@ private:
 	UPROPERTY(Transient) TMap<FName, FName> SocketOverride;
 
 	void EnsureDynamicMIDs(UStaticMeshComponent* Comp);
-	bool IsDetachableNow(FName PartName) const;
 };

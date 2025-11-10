@@ -1,4 +1,7 @@
 #include "Actors/RobotActor.h"
+#include "Components/InteractionTraceComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "NiagaraFunctionLibrary.h"
@@ -6,20 +9,14 @@
 #include "Components/InteractionTraceComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "Actors/RobotPartActor.h"
-#include "Kismet/KismetMathLibrary.h"
 
-namespace
-{
-	static const FName Part_Torso(TEXT("Torso"));
-}
+namespace { static const FName Part_Torso(TEXT("Torso")); }
 
 ARobotActor::ARobotActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
-
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
-
 	Arm = CreateDefaultSubobject<URobotArmComponent>(TEXT("RobotArm"));
 	Highlight = CreateDefaultSubobject<UHighlightComponent>(TEXT("Highlight"));
 	Assembly = CreateDefaultSubobject<UAssemblyBuilderComponent>(TEXT("Assembly"));
@@ -38,10 +35,20 @@ void ARobotActor::BeginPlay()
 	if (Arm) Arm->OnAttachedChanged.AddDynamic(this, &ARobotActor::OnArmAttachedChanged);
 	if (Highlight) Highlight->OnHighlightedChanged.AddDynamic(this, &ARobotActor::OnHighlightedChanged);
 
-	if (UInteractionTraceComponent* Trace = FindComponentByClass<UInteractionTraceComponent>())
+	// Bind to the pawn’s interaction trace (not the robot)
+	UInteractionTraceComponent* Trace = nullptr;
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (APawn* P = PC->GetPawn())
+		{
+			Trace = P->FindComponentByClass<UInteractionTraceComponent>();
+		}
+	}
+	if (Trace)
 	{
 		Trace->OnHoverComponentChanged.AddDynamic(this, &ARobotActor::OnHoverComponentChanged);
 		Trace->OnInteractPressed.AddDynamic(this, &ARobotActor::OnInteractPressed);
+		Trace->OnInteractAltPressed.AddDynamic(this, &ARobotActor::OnInteractPressed); // Alt press reuses same handler (reattach)
 		Trace->OnInteractReleased.AddDynamic(this, &ARobotActor::OnInteractReleased);
 	}
 
@@ -64,6 +71,15 @@ void ARobotActor::BeginPlay()
 		{
 			StatusWidget = CreateWidget<UUserWidget>(PC2, StatusWidgetClass);
 			if (StatusWidget) StatusWidget->AddToViewport();
+		}
+	}
+
+	if (DebugWidgetClass)
+	{
+		if (APlayerController* PC3 = GetWorld()->GetFirstPlayerController())
+		{
+			DebugWidget = CreateWidget<UUserWidget>(PC3, DebugWidgetClass);
+			if (DebugWidget) DebugWidget->AddToViewport(10);
 		}
 	}
 }
@@ -170,6 +186,16 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 		Assembly->ApplyHighlightScalarToParts(Arm->Config->ArmPartNames,1.f);
 	}
 	else Assembly->ApplyHighlightScalarAll(0.f);
+
+	HoveredPartName = NAME_None;
+	if (HitComponent && Assembly && Assembly->FindPartNameByComponent(HitComponent, HoveredPartName))
+	{
+		// keep HoveredPartName set
+	}
+	else
+	{
+		HoveredPartName = NAME_None;
+	}
 }
 
 void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* HitActor)
@@ -290,14 +316,13 @@ void ARobotActor::ScrambleParts()
 
 	// Collect detachable part names
 	TArray<FName> PartNames;
-	for (const auto& Pair : Targets)
+	for (const auto& PairComp : Targets)
 	{
-		// Reverse lookup name if component matches a part
-		for (const auto& MapPair : Assembly->AssemblyConfig->Parts)
+		for (const FRobotPartSpec& MapSpec : Assembly->AssemblyConfig->Parts)
 		{
-			if (Assembly->GetPartByName(MapPair.PartName) == Pair)
+			if (Assembly->GetPartByName(MapSpec.PartName) == PairComp)
 			{
-				if (Assembly->IsDetachableNow(MapPair.PartName)) PartNames.AddUnique(MapPair.PartName);
+				if (Assembly->IsDetachable(MapSpec.PartName)) PartNames.AddUnique(MapSpec.PartName);
 			}
 		}
 	}
@@ -320,11 +345,48 @@ void ARobotActor::ScrambleParts()
 				}
 				else
 				{
-					// Random target
-					NewParent = Targets[UKismetMathLibrary::RandomInteger(Targets.Num())];
+					// Random target using FMath
+					const int32 Index = (Targets.Num() >0) ? FMath::RandRange(0, Targets.Num()-1) :0;
+					NewParent = Targets[Index];
 					Assembly->AttachDetachedPartTo(PName, TempActor, NewParent, NAME_None);
 				}
 			}
+		}
+	}
+}
+
+void ARobotActor::DetachPartByName(const FString& PartName)
+{
+	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
+	ARobotPartActor* Out=nullptr; if (Assembly->DetachPart(FName(*PartName), Out)) { UE_LOG(LogTemp, Log, TEXT("Detached %s"), *PartName); } else { UE_LOG(LogTemp, Warning, TEXT("Detach failed for %s"), *PartName); }
+}
+
+void ARobotActor::ReattachPartByName(const FString& PartName)
+{
+	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
+	ARobotPartActor* Found=nullptr; // find by name in DetachedParts map
+	// naive scan: try to spawn name then check; rely on internal map via IsPartDetached and Reattach
+	if (!Assembly->IsPartDetached(FName(*PartName))) { UE_LOG(LogTemp, Warning, TEXT("Part %s not marked detached"), *PartName); return; }
+	// We don't have direct accessor to actor; call FindNearestAttachTarget from current actor position is not applicable. We'll ask free attach by name is not supported; do normal Reattach via internal map by passing nullptr is not allowed. So skip.
+	UE_LOG(LogTemp, Warning, TEXT("Use in-game drag or alt-press to reattach; console reattach requires actor ref."));
+}
+
+void ARobotActor::ListRobotParts()
+{
+	if (!Assembly || !Assembly->AssemblyConfig) { UE_LOG(LogTemp, Warning, TEXT("No Assembly/Config")); return; }
+	for (const FRobotPartSpec& S : Assembly->AssemblyConfig->Parts) { UE_LOG(LogTemp, Log, TEXT("Part: %s Parent:%s Socket:%s"), *S.PartName.ToString(), *S.ParentPartName.ToString(), *S.ParentSocketName.ToString()); }
+}
+
+void ARobotActor::TraceTest()
+{
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		APawn* P = PC->GetPawn(); if (!P) { UE_LOG(LogTemp, Warning, TEXT("No Pawn")); return; }
+		if (UInteractionTraceComponent* Trace = P->FindComponentByClass<UInteractionTraceComponent>())
+		{
+			const FVector Start = P->GetActorLocation(); const FVector End = Start + P->GetActorForwardVector() *500.f;
+			DrawDebugLine(GetWorld(), Start, End, FColor::Yellow, false,2.f,0,2.f);
+			UE_LOG(LogTemp, Log, TEXT("TraceTest drew line from %s to %s"), *Start.ToString(), *End.ToString());
 		}
 	}
 }

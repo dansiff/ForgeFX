@@ -176,7 +176,7 @@ bool UAssemblyBuilderComponent::DetachPart(FName PartName, ARobotPartActor*& Out
 	UWorld* World = GetWorld(); if (!World) return false;
 	UStaticMesh* Mesh = Comp->GetStaticMesh();
 	TArray<UMaterialInterface*> Materials; for (int32 i=0, n=Comp->GetNumMaterials(); i<n; ++i) Materials.Add(Comp->GetMaterial(i));
-	TSubclassOf<ARobotPartActor> ClassToSpawn = Spec.DetachedActorClass ? Spec.DetachedActorClass : ARobotPartActor::StaticClass();
+	TSubclassOf<ARobotPartActor> ClassToSpawn = Spec.DetachedActorClass ? Spec.DetachedActorClass : TSubclassOf<ARobotPartActor>(ARobotPartActor::StaticClass());
 	OutActor = World->SpawnActor<ARobotPartActor>(ClassToSpawn, Comp->GetComponentTransform()); if (!OutActor) return false;
 	OutActor->InitializePart(PartName, Mesh, Materials);
 	OutActor->GetMeshComponent()->SetCollisionProfileName(Spec.DetachedCollisionProfile);
@@ -203,11 +203,9 @@ bool UAssemblyBuilderComponent::AttachDetachedPartTo(FName PartName, ARobotPartA
 	if (!PartActor || !NewParent) return false;
 	UStaticMeshComponent* Comp = GetPartByName(PartName);
 	if (!Comp) return false;
-	// Make original component visible and attach to the new parent/socket
 	Comp->SetHiddenInGame(false);
 	Comp->SetVisibility(true, true);
 	Comp->AttachToComponent(NewParent, FAttachmentTransformRules::SnapToTargetIncludingScale, SocketName);
-	// Remove temp actor and record overrides for future operations
 	PartActor->Destroy();
 	DetachedParts.Remove(PartName);
 	ParentOverride.Add(PartName, NewParent);
@@ -220,26 +218,17 @@ bool UAssemblyBuilderComponent::FindNearestAttachTarget(const FVector& AtWorldLo
 	OutParent = nullptr; OutSocket = NAME_None; OutDistance = TNumericLimits<float>::Max();
 	for (const auto& Pair : NameToComponent)
 	{
-		UStaticMeshComponent* Comp = Pair.Value.Get();
-		if (!Comp) continue;
-		// default: allow attaching directly to component origin
+		UStaticMeshComponent* Comp = Pair.Value.Get(); if (!Comp) continue;
 		{
 			const float D = FVector::Dist(AtWorldLocation, Comp->GetComponentLocation());
-			if (D < OutDistance)
-			{
-				OutDistance = D; OutParent = Comp; OutSocket = NAME_None;
-			}
+			if (D < OutDistance) { OutDistance = D; OutParent = Comp; OutSocket = NAME_None; }
 		}
-		// sockets
-		TArray<FName> Sockets; Comp->GetAllSocketNames(Sockets);
+		TArray<FName> Sockets = Comp->GetAllSocketNames();
 		for (const FName S : Sockets)
 		{
 			const FTransform T = Comp->GetSocketTransform(S, RTS_World);
 			const float D = FVector::Dist(AtWorldLocation, T.GetLocation());
-			if (D < OutDistance)
-			{
-				OutDistance = D; OutParent = Comp; OutSocket = S;
-			}
+			if (D < OutDistance) { OutDistance = D; OutParent = Comp; OutSocket = S; }
 		}
 	}
 	return OutParent != nullptr;
@@ -250,9 +239,16 @@ void UAssemblyBuilderComponent::GetAllAttachTargets(TArray<USceneComponent*>& Ou
 	OutTargets.Reset();
 	for (const auto& Pair : NameToComponent)
 	{
-		if (UStaticMeshComponent* Comp = Pair.Value.Get())
-		{
-			OutTargets.Add(Comp);
-		}
+		if (UStaticMeshComponent* Comp = Pair.Value.Get()) { OutTargets.Add(Comp); }
 	}
+}
+
+bool UAssemblyBuilderComponent::IsDetachable(FName PartName) const
+{
+	return IsDetachableNow(PartName);
+}
+
+bool UAssemblyBuilderComponent::IsDetachEnabled(FName PartName) const
+{
+	return IsDetachableNow(PartName);
 }
