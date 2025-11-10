@@ -5,7 +5,6 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Actors/RobotPartActor.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "Engine/SCS_Node.h"
 
 UAssemblyBuilderComponent::UAssemblyBuilderComponent()
 {
@@ -244,4 +243,16 @@ bool UAssemblyBuilderComponent::FindNearestAttachTarget(const FVector& AtWorldLo
 		}
 	}
 	return OutParent != nullptr;
+}
+
+void UAssemblyBuilderComponent::GetAllAttachTargets(TArray<USceneComponent*>& OutTargets) const
+{
+	OutTargets.Reset();
+	for (const auto& Pair : NameToComponent)
+	{
+		if (UStaticMeshComponent* Comp = Pair.Value.Get())
+		{
+			OutTargets.Add(Comp);
+		}
+	}
 }

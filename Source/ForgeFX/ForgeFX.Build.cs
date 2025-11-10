@@ -8,10 +8,8 @@ public class ForgeFX : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		// Core runtime modules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
-		// Gameplay & features
-		PrivateDependencyModuleNames.AddRange(new string[] { "InputCore", "EnhancedInput", "UMG", "Niagara" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "InputCore", "EnhancedInput", "UMG", "Niagara", "Slate", "SlateCore" });
 
 		if (Target.bBuildEditor)
 		{

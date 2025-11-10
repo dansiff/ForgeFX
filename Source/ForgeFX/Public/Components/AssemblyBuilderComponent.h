@@ -35,23 +35,22 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") UStaticMeshComponent* GetPartByName(FName PartName) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindPartNameByComponent(const UPrimitiveComponent* Comp, FName& OutName) const;
 
-	// Detach / Reattach (to spec parent)
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPart(FName PartName, ARobotPartActor*& OutActor);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPart(FName PartName, ARobotPartActor* PartActor);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsPartDetached(FName PartName) const { return DetachedParts.Contains(PartName); }
 
-	// Spec helpers
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetPartSpec(FName PartName, FRobotPartSpec& OutSpec) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetAttachParentAndSocket(FName PartName, USceneComponent*& OutParent, FName& OutSocket) const;
 
-	// Blueprint convenience: runtime detach toggles
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForParts(const TArray<FName>& PartNames, bool bEnabled);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForAll(bool bEnabled);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachEnabled(FName PartName) const;
 
-	// Flexible attach-anywhere helpers
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const;
+
+	// New: get all current possible attach targets (components)
+	UFUNCTION(BlueprintPure, Category="Robot|Assembly") void GetAllAttachTargets(TArray<USceneComponent*>& OutTargets) const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
 
@@ -62,7 +61,6 @@ private:
 	UPROPERTY(Transient) TMap<TObjectPtr<UStaticMeshComponent>, FDynamicMIDArray> DynamicMIDs;
 	UPROPERTY(Transient) TMap<FName, TObjectPtr<ARobotPartActor>> DetachedParts;
 	UPROPERTY(Transient) TMap<FName, bool> DetachEnabledOverride;
-	// Overrides for current parent/socket after free attachment
 	UPROPERTY(Transient) TMap<FName, TWeakObjectPtr<USceneComponent>> ParentOverride;
 	UPROPERTY(Transient) TMap<FName, FName> SocketOverride;
 

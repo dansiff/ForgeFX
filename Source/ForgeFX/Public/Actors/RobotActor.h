@@ -14,6 +14,14 @@ class UPrimitiveComponent;
 class UUserWidget;
 class ARobotPartActor;
 
+UENUM(BlueprintType)
+enum class EDetachInteractMode : uint8
+{
+	HoldToDrag UMETA(DisplayName="Hold To Drag"),
+	ToggleToDrag UMETA(DisplayName="Toggle To Drag"),
+	ClickToggleAttach UMETA(DisplayName="Click Toggle Attach")
+};
+
 /**
  * Base actor composing the robot pieces; intended to be subclassed in Blueprint.
  * Owns Arm, Highlight, and Assembly components and wires their interactions.
@@ -61,6 +69,10 @@ protected:
 	bool TrySnapDraggedPartToSocket();
 	bool TryFreeAttachDraggedPart();
 
+	// Scramble all detachable parts (mapped to key P)
+	UFUNCTION()
+	void ScrambleParts();
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot")
 	TObjectPtr<USceneComponent> Root;
@@ -81,6 +93,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	TObjectPtr<UInputAction> ToggleArmAction;
 
+	UPROPERTY(EditAnywhere, Category="Input")
+	TObjectPtr<UInputAction> ScrambleAction;
+
 	// Mapping context priority (avoid name clash with AActor::InputPriority)
 	UPROPERTY(EditAnywhere, Category="Input")
 	int32 MappingPriority =0;
@@ -91,6 +106,10 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> StatusWidget;
+
+	// Interaction mode selection
+	UPROPERTY(EditAnywhere, Category="Robot|Interact")
+	EDetachInteractMode DetachMode = EDetachInteractMode::HoldToDrag;
 
 	// Drag state
 	bool bDragging = false;
@@ -126,4 +145,14 @@ protected:
 	// Max distance to consider for free attach (cm). If <=0, uses AttachPosTolerance
 	UPROPERTY(EditAnywhere, Category="Robot|Attach")
 	float FreeAttachMaxDistance =25.f;
+
+	// Scramble parameters
+	UPROPERTY(EditAnywhere, Category="Robot|Scramble")
+	int32 ScrambleIterations =1;
+
+	UPROPERTY(EditAnywhere, Category="Robot|Scramble")
+	bool bScramblePhysicsEnable = false;
+
+	UPROPERTY(EditAnywhere, Category="Robot|Scramble")
+	float ScrambleSocketSearchRadius =30.f;
 };

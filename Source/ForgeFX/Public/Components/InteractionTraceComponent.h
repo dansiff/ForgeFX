@@ -7,6 +7,7 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHoverComponentChanged, UPrimitiveComponent*, HitComponent, AActor*, HitActor);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInteractPressedSig, UPrimitiveComponent*, HitComponent, AActor*, HitActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInteractAltPressedSig, UPrimitiveComponent*, HitComponent, AActor*, HitActor);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInteractReleasedSig);
 
 /**
@@ -34,17 +35,21 @@ public:
 	void InteractPressed();
 	UFUNCTION(BlueprintCallable, Category="Interaction")
 	void InteractReleased();
+	UFUNCTION(BlueprintCallable, Category="Interaction")
+	void InteractAltPressed();
 
 	UPROPERTY(BlueprintAssignable, Category="Interaction")
 	FOnHoverComponentChanged OnHoverComponentChanged;
 	UPROPERTY(BlueprintAssignable, Category="Interaction")
 	FOnInteractPressedSig OnInteractPressed;
 	UPROPERTY(BlueprintAssignable, Category="Interaction")
+	FOnInteractAltPressedSig OnInteractAltPressed;
+	UPROPERTY(BlueprintAssignable, Category="Interaction")
 	FOnInteractReleasedSig OnInteractReleased;
 
 private:
 	TWeakInterfacePtr<IInteractable> CurrentHover;
 	TWeakObjectPtr<UPrimitiveComponent> CurrentHitComp;
-	void UpdateHover(const TWeakInterfacePtr<IInteractable>& NewHover, UPrimitiveComponent* NewComp, AActor* HitActor);
 	bool bInteractHeld = false;
+	void UpdateHover(const TWeakInterfacePtr<IInteractable>& NewHover, UPrimitiveComponent* NewComp, AActor* HitActor);
 };

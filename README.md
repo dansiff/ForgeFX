@@ -3,9 +3,30 @@
 Quick start (for reviewers)
 - Engine: Unreal Engine5.6
 - Open `ForgeFX.uproject` in the editor.
-- Load the level `MainDemo` 
+- Load `MainDemo` level.
 - Press Play.
-- Controls: WASD = move, Mouse = look, E = interact/drag, (optional) Y = ToggleArm, Shift = Boost, Space/Ctrl = Up/Down.
+- Controls: WASD move, Mouse look, Space/Ctrl up/down, Shift boost, E press/hold interact (detach/drag), Y toggle arm, P scramble parts.
+
+Enhanced Input (professional mapping)
+Define these actions:
+- `IA_Move` (Axis2D): W(+Y), S(-Y), A(-X), D(+X)
+- `IA_Look` (Axis2D): Mouse X(+X), Mouse Y(+Y or -Y to invert)
+- `IA_UpDown` (Axis1D): Space(+1), LeftCtrl(-1)
+- `IA_Boost` (Trigger): LeftShift (Started/Completed)
+- `IA_Interact` (Trigger): E (Started/Completed) – press begins drag/detach; release finalizes snap/free-attach
+- `IA_InteractAlt` (Trigger): RightMouseButton (Started/Completed) – attempt reattach (snap original, else free attach)
+- `IA_ToggleArm` (Trigger): Y (Started)
+- `IA_Scramble` (Trigger): P (Started)
+
+Apply mapping context:
+- Set `IMC_Demo` on PlayerController (`DefaultInputContext`) or Pawn (`InputContext`).
+- Assign the C++ properties: in placed `ARobotDemoPawn` and `ARobotActor` instances.
+
+Interaction summary
+- Hover part (crosshair) + E Started: detach (if detachable) and begin drag.
+- E Completed: attempt socket snap; if fail and free-attach enabled, attach to nearest valid target.
+- Y: simple arm attach/detach toggle.
+- P: scramble all detachable parts (random reattachment or nearest socket within radius).
 
 Full-body modular detachment demo
 - Any part flagged bDetachable in `DA_RobotAssembly` can be pulled off with E.
@@ -65,6 +86,9 @@ if (Assembly->FindNearestAttachTarget(DraggedLoc, Parent, Socket, Dist) && Dist 
 }
 ```
 
+Scramble feature
+- `ScrambleParts()` detaches all detachable components and reattaches them to random or nearest sockets (iterations configurable; optional physics).
+
 Troubleshooting
 - Missing Detach fields: close editor, full C++ rebuild, reopen asset.
 - Snap fails: increase `AttachPosTolerance` or ensure socket names match.
@@ -76,3 +100,12 @@ Testing additions (recommended)
 
 ---
 All parts are now configurable for detachment and arbitrary reattachment, enabling a flexible demonstration of modular assembly.
+
+# ForgeFX Robot Assessment (Updated Interaction)
+
+Left Mouse (E action) – detach / drag (based on DetachMode).
+Right Mouse (Alt action) – attempt reattach (snap original, else free attach).
+
+Add `IA_InteractAlt` (Trigger) mapped to RightMouseButton and assign to `InteractAltAction` on the pawn.
+
+Rest of README content remains below.

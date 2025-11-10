@@ -65,12 +65,20 @@ void ARobotDemoPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	{
 		if (MoveAction) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
 		if (LookAction) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
-		if (InteractAction) EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::Interact);
 		if (UpDownAction) EIC->BindAction(UpDownAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::UpDown);
 		if (BoostAction)
 		{
 			EIC->BindAction(BoostAction, ETriggerEvent::Started, this, &ARobotDemoPawn::BoostOn);
 			EIC->BindAction(BoostAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::BoostOff);
+		}
+		if (InteractAction)
+		{
+			EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractPress);
+			EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::InteractRelease);
+		}
+		if (InteractAltAction)
+		{
+			EIC->BindAction(InteractAltAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractAltPress);
 		}
 	}
 }
@@ -106,10 +114,17 @@ void ARobotDemoPawn::BoostOff(const FInputActionValue& Value)
 	Movement->MaxSpeed = BaseMaxSpeed;
 }
 
-void ARobotDemoPawn::Interact(const FInputActionValue& Value)
+void ARobotDemoPawn::InteractPress(const FInputActionValue& Value)
 {
-	if (Interaction)
-	{
-		Interaction->InteractPressed();
-	}
+	if (Interaction) Interaction->InteractPressed();
+}
+
+void ARobotDemoPawn::InteractRelease(const FInputActionValue& Value)
+{
+	if (Interaction) Interaction->InteractReleased();
+}
+
+void ARobotDemoPawn::InteractAltPress(const FInputActionValue& Value)
+{
+	if (Interaction) Interaction->InteractAltPressed();
 }

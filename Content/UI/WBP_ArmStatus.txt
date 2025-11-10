@@ -1,0 +1,6 @@
+(Placeholder) Create a UMG Widget Blueprint named WBP_ArmStatus:
+1. Canvas Panel -> TextBlock centered.
+2. Bind text to a function reading URobotArmComponent::IsAttached() from the placed ARobotActor.
+ Display "Attached" or "Detached".
+3. Optionally color: green when attached, red when detached.
+Save as /Game/UI/WBP_ArmStatus.

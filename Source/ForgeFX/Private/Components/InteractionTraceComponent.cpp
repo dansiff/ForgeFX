@@ -72,6 +72,14 @@ void UInteractionTraceComponent::InteractPressed()
 	}
 }
 
+void UInteractionTraceComponent::InteractAltPressed()
+{
+	if (CurrentHover.IsValid())
+	{
+		OnInteractAltPressed.Broadcast(CurrentHitComp.Get(), Cast<AActor>(CurrentHover.GetObject()));
+	}
+}
+
 void UInteractionTraceComponent::InteractReleased()
 {
 	bInteractHeld = false;

@@ -27,7 +27,9 @@ protected:
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
-	void Interact(const FInputActionValue& Value);
+	void InteractPress(const FInputActionValue& Value);
+	void InteractRelease(const FInputActionValue& Value);
+	void InteractAltPress(const FInputActionValue& Value);
 	void UpDown(const FInputActionValue& Value);
 	void BoostOn(const FInputActionValue& Value);
 	void BoostOff(const FInputActionValue& Value);
@@ -43,6 +45,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> MoveAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> LookAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> InteractAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> InteractAltAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> UpDownAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> BoostAction;
 

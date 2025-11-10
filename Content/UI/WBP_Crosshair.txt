@@ -1,0 +1,5 @@
+(Placeholder) Create a UMG Widget Blueprint named WBP_Crosshair:
+1. Add an Image widget anchored to center.
+2. Set Brush to a small dot or crosshair texture; size ~16x16.
+3. Optionally add dynamic color change via a binding.
+Save as /Game/UI/WBP_Crosshair.
