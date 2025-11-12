@@ -25,6 +25,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Interaction")
 	float TraceDistance =500.f;
 
+	// Optional debug drawing
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Interaction|Debug")
+	bool bDrawDebugTrace = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Interaction|Debug")
+	bool bLogTraceHits = false;
+
 	// Line trace every frame to drive hover (kept cheap)
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 

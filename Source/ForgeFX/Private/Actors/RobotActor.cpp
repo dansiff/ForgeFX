@@ -16,6 +16,11 @@
 
 namespace { static const FName Part_Torso(TEXT("Torso")); }
 
+static FVector ComputeSafeOrbitCenter(const ARobotActor* Robot)
+{
+	return Robot ? Robot->GetActorLocation() : FVector::ZeroVector;
+}
+
 ARobotActor::ARobotActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -42,7 +47,7 @@ void ARobotActor::BeginPlay()
 	Super::BeginPlay();
 	if (Assembly)
 	{
-		UE_LOG(LogTemp, Log, TEXT("RobotActor: AssemblyConfig=%s"), *GetNameSafe(Assembly->AssemblyConfig));
+		if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("RobotActor: AssemblyConfig=%s"), *GetNameSafe(Assembly->AssemblyConfig));
 		Assembly->RebuildAssembly();
 	}
 	if (Arm) Arm->OnAttachedChanged.AddDynamic(this, &ARobotActor::OnArmAttachedChanged);
@@ -58,8 +63,8 @@ void ARobotActor::BeginPlay()
 		{
 			if (UEnhancedInputComponent* PawnEIC = Cast<UEnhancedInputComponent>(P->InputComponent))
 			{
-				if (ToggleArmAction) { PawnEIC->BindAction(ToggleArmAction, ETriggerEvent::Started, this, &ARobotActor::ToggleArm); UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound ToggleArm on Pawn EIC")); }
-				if (ScrambleAction) { PawnEIC->BindAction(ScrambleAction, ETriggerEvent::Started, this, &ARobotActor::ScrambleParts); UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound Scramble on Pawn EIC")); }
+				if (ToggleArmAction) { PawnEIC->BindAction(ToggleArmAction, ETriggerEvent::Started, this, &ARobotActor::ToggleArm); if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound ToggleArm on Pawn EIC")); }
+				if (ScrambleAction) { PawnEIC->BindAction(ScrambleAction, ETriggerEvent::Started, this, &ARobotActor::ScrambleParts); if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound Scramble on Pawn EIC")); }
 			}
 		}
 		if (ULocalPlayer* LP = PC->GetLocalPlayer())
@@ -112,8 +117,8 @@ void ARobotActor::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Visual snap preview indicator in Tick after updating dragged part location
-	if (bDraggingPart && DraggedPartActor && Assembly)
+	// Visual snap preview indicator
+	if (bShowSnapPreviewIndicator && bDraggingPart && DraggedPartActor && Assembly)
 	{
 		USceneComponent* Parent; FName Socket;
 		if (Assembly->GetAttachParentAndSocket(DraggedPartName, Parent, Socket) && Parent)
@@ -124,8 +129,7 @@ void ARobotActor::Tick(float DeltaSeconds)
 			PreviewSocketIndicator->SetWorldLocation(SocketWorld.GetLocation());
 			PreviewSocketIndicator->SetVisibility(true, true);
 			PreviewSocketIndicator->SetSphereRadius(PreviewSphereRadius);
-			const FColor Col = bSnapSoon ? FColor::Green : FColor::Red;
-			PreviewSocketIndicator->ShapeColor = Col;
+			PreviewSocketIndicator->ShapeColor = bSnapSoon ? FColor::Green : FColor::Red;
 		}
 		else { PreviewSocketIndicator->SetVisibility(false, true); }
 	}
@@ -134,21 +138,17 @@ void ARobotActor::Tick(float DeltaSeconds)
 
 bool ARobotActor::ComputeCursorWorldOnPlane(float PlaneZ, FVector& OutWorldPoint) const
 {
+	static FVector LastGood = FVector::ZeroVector;
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		float MX, MY; PC->GetMousePosition(MX, MY);
-		FVector WorldOrigin, WorldDir;
-		if (PC->DeprojectScreenPositionToWorld(MX, MY, WorldOrigin, WorldDir))
-		{
-			if (!FMath::IsNearlyZero(WorldDir.Z))
-			{
-				const float T = (PlaneZ - WorldOrigin.Z) / WorldDir.Z;
-				OutWorldPoint = WorldOrigin + T * WorldDir;
-				return true;
-			}
-		}
+		float MX, MY; if (!PC->GetMousePosition(MX, MY)) { OutWorldPoint = LastGood; return false; }
+		FVector WorldOrigin, WorldDir; if (!PC->DeprojectScreenPositionToWorld(MX, MY, WorldOrigin, WorldDir)) { OutWorldPoint = LastGood; return false; }
+		if (FMath::IsNearlyZero(WorldDir.Z,1e-4f)) { OutWorldPoint = LastGood; return false; }
+		const float T = (PlaneZ - WorldOrigin.Z) / WorldDir.Z;
+		if (!FMath::IsFinite(T)) { OutWorldPoint = LastGood; return false; }
+		OutWorldPoint = WorldOrigin + T * WorldDir; LastGood = OutWorldPoint; return true;
 	}
-	return false;
+	OutWorldPoint = LastGood; return false;
 }
 
 bool ARobotActor::TrySnapDraggedPartToSocket()
@@ -163,7 +163,6 @@ bool ARobotActor::TrySnapDraggedPartToSocket()
 	const float AngleDiff = DraggedPartActor->GetActorQuat().AngularDistance(SocketWorld.GetRotation()) *180.f / PI;
 	if (AngleDiff > AttachAngleToleranceDeg) return false;
 	Assembly->ReattachPart(DraggedPartName, DraggedPartActor);
-	// Restore collision on component
 	if (UStaticMeshComponent* Comp = Assembly->GetPartByName(DraggedPartName)) { Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly); }
 	bDraggingPart = false; DraggedPartActor = nullptr; DraggedPartName = NAME_None; return true;
 }
@@ -185,7 +184,6 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 	if (!Assembly) return;
 	if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 	{
-		// Detached actors handle their own highlight; clear assembly highlight
 		Assembly->ApplyHighlightScalarAll(0.f);
 		HoveredPartName = PartActor->GetPartName();
 		return;
@@ -200,7 +198,6 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 	}
 
 	HoveredPartName = Part;
-	// Torso => highlight all, otherwise highlight only the hovered part
 	const bool bIsTorso = (Part == Part_Torso);
 	Assembly->ApplyHighlightScalarAll(0.f);
 	if (bIsTorso)
@@ -216,12 +213,11 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 
 void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* HitActor)
 {
-	UE_LOG(LogTemp, Log, TEXT("OnInteractPressed: HitComp=%s HitActor=%s DetachMode=%d"), *GetNameSafe(HitComponent), *GetNameSafe(HitActor), (int32)DetachMode);
+	if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("OnInteractPressed: HitComp=%s HitActor=%s DetachMode=%d"), *GetNameSafe(HitComponent), *GetNameSafe(HitActor), (int32)DetachMode);
 	if (DetachMode == EDetachInteractMode::ClickToggleAttach)
 	{
 		if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 		{
-			UE_LOG(LogTemp, Log, TEXT("ClickToggleAttach: attempting reattach for %s"), *PartActor->GetPartName().ToString());
 			DraggedPartActor = PartActor; DraggedPartName = PartActor->GetPartName();
 			if (!TrySnapDraggedPartToSocket()) { TryFreeAttachDraggedPart(); }
 			DraggedPartActor = nullptr; DraggedPartName = NAME_None; bDraggingPart = false; return;
@@ -233,9 +229,9 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 				ARobotPartActor* NewActor=nullptr;
 				if (Assembly->DetachPart(Part, NewActor))
 				{
-					UE_LOG(LogTemp, Log, TEXT("Detached (ClickToggleAttach) %s"), *Part.ToString());
+					if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("Detached (ClickToggleAttach) %s"), *Part.ToString());
 				}
-				else
+				else if (bEnableRobotDebugLogs)
 				{
 					UE_LOG(LogTemp, Warning, TEXT("Detach failed %s"), *Part.ToString());
 				}
@@ -246,10 +242,9 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 	// Drag modes
 	if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 	{
-		UE_LOG(LogTemp, Log, TEXT("Begin drag existing detached part %s"), *PartActor->GetPartName().ToString());
 		DraggedPartActor = PartActor; DraggedPartName = PartActor->GetPartName(); bDraggingPart = true; PartDragPlaneZ = PartActor->GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld)) PartDragOffset = PartActor->GetActorLocation() - CursorWorld; return;
 	}
-	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("No Assembly in OnInteractPressed")); return; }
+	if (!Assembly) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Assembly in OnInteractPressed")); return; }
 	FName Part;
 	if (HitComponent && Assembly->FindPartNameByComponent(HitComponent, Part))
 	{
@@ -257,16 +252,14 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 		{
 			ARobotPartActor* NewPartActor = nullptr; if (Assembly->DetachPart(Part, NewPartActor) && NewPartActor)
 			{
-				UE_LOG(LogTemp, Log, TEXT("Detached %s (drag mode)"), *Part.ToString());
 				DraggedPartActor = NewPartActor; DraggedPartName = Part; PartDragPlaneZ = NewPartActor->GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld)) PartDragOffset = NewPartActor->GetActorLocation() - CursorWorld; bDraggingPart = (DetachMode != EDetachInteractMode::ToggleToDrag) ? true : !bDraggingPart; return;
 			}
-			else UE_LOG(LogTemp, Warning, TEXT("Detach failed %s"), *Part.ToString());
+			else if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("Detach failed %s"), *Part.ToString());
 		}
 	}
 	// Whole robot drag
 	if (bAllowTorsoDrag && HitComponent && Assembly->FindPartNameByComponent(HitComponent, Part) && Part == Part_Torso)
 	{
-		UE_LOG(LogTemp, Log, TEXT("Torso drag engaged"));
 		if (DetachMode == EDetachInteractMode::HoldToDrag)
 		{
 			bDragging = true; DragPlaneZ = GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(DragPlaneZ, CursorWorld)) DragOffset = GetActorLocation() - CursorWorld; return;
@@ -274,10 +267,10 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 		else if (DetachMode == EDetachInteractMode::ToggleToDrag)
 		{
 			bDragging = !bDragging; if (bDragging) { DragPlaneZ = GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(DragPlaneZ, CursorWorld)) DragOffset = GetActorLocation() - CursorWorld; }
-			UE_LOG(LogTemp, Log, TEXT("Torso drag toggled to %s"), bDragging?TEXT("ON"):TEXT("OFF")); return;
+			if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("Torso drag toggled to %s"), bDragging?TEXT("ON"):TEXT("OFF")); return;
 		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("OnInteractPressed: no actionable target"));
+	if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Verbose, TEXT("OnInteractPressed: no actionable target"));
 }
 
 void ARobotActor::OnInteractReleased()
@@ -293,11 +286,8 @@ void ARobotActor::OnInteractReleased()
 
 	if (DetachMode == EDetachInteractMode::ToggleToDrag)
 	{
-		// Release does nothing; second press ends drag path (handled in Press)
 		return;
 	}
-
-	// ClickToggleAttach handled entirely in Press
 }
 
 void ARobotActor::OnArmAttachedChanged(bool bNowAttached)
@@ -331,12 +321,10 @@ void ARobotActor::ToggleArm()
 
 void ARobotActor::ScrambleParts()
 {
-	UE_LOG(LogTemp, Log, TEXT("ScrambleParts invoked"));
 	if (!Assembly || ScrambleIterations <=0) return;
 	TArray<USceneComponent*> Targets; Assembly->GetAllAttachTargets(Targets);
 	if (Targets.Num()==0) return;
 
-	// Collect detachable part names
 	TArray<FName> PartNames;
 	for (const auto& PairComp : Targets)
 	{
@@ -354,12 +342,11 @@ void ARobotActor::ScrambleParts()
 	{
 		for (FName PName : PartNames)
 		{
-			if (Assembly->IsPartDetached(PName)) continue; // already detached
+			if (Assembly->IsPartDetached(PName)) continue;
 			ARobotPartActor* TempActor=nullptr;
 			if (Assembly->DetachPart(PName, TempActor) && TempActor)
 			{
 				if (bScramblePhysicsEnable) TempActor->EnablePhysics(true);
-				// Find random attach target (nearest optional logic)
 				USceneComponent* NewParent = nullptr; FName Socket = NAME_None; float Dist=0.f;
 				if (ScrambleSocketSearchRadius >0.f && Assembly->FindNearestAttachTarget(TempActor->GetActorLocation(), NewParent, Socket, Dist) && Dist <= ScrambleSocketSearchRadius)
 				{
@@ -367,7 +354,6 @@ void ARobotActor::ScrambleParts()
 				}
 				else
 				{
-					// Random target using FMath
 					const int32 Index = (Targets.Num() >0) ? FMath::RandRange(0, Targets.Num()-1) :0;
 					NewParent = Targets[Index];
 					Assembly->AttachDetachedPartTo(PName, TempActor, NewParent, NAME_None);
@@ -379,36 +365,33 @@ void ARobotActor::ScrambleParts()
 
 void ARobotActor::DetachPartByName(const FString& PartName)
 {
-	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
-	ARobotPartActor* Out=nullptr; if (Assembly->DetachPart(FName(*PartName), Out)) { UE_LOG(LogTemp, Log, TEXT("Detached %s"), *PartName); } else { UE_LOG(LogTemp, Warning, TEXT("Detach failed for %s"), *PartName); }
+	if (!Assembly) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
+	ARobotPartActor* Out=nullptr; if (Assembly->DetachPart(FName(*PartName), Out)) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("Detached %s"), *PartName); } else { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("Detach failed for %s"), *PartName); }
 }
 
 void ARobotActor::ReattachPartByName(const FString& PartName)
 {
-	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
-	ARobotPartActor* Found=nullptr; // find by name in DetachedParts map
-	// naive scan: try to spawn name then check; rely on internal map via IsPartDetached and Reattach
-	if (!Assembly->IsPartDetached(FName(*PartName))) { UE_LOG(LogTemp, Warning, TEXT("Part %s not marked detached"), *PartName); return; }
-	// We don't have direct accessor to actor; call FindNearestAttachTarget from current actor position is not applicable. We'll ask free attach by name is not supported; do normal Reattach via internal map by passing nullptr is not allowed. So skip.
-	UE_LOG(LogTemp, Warning, TEXT("Use in-game drag or alt-press to reattach; console reattach requires actor ref."));
+	if (!Assembly) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Assembly")); return; }
+	if (!Assembly->IsPartDetached(FName(*PartName))) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("Part %s not marked detached"), *PartName); return; }
+	if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("Use in-game drag or alt-press to reattach; console reattach requires actor ref."));
 }
 
 void ARobotActor::ListRobotParts()
 {
-	if (!Assembly || !Assembly->AssemblyConfig) { UE_LOG(LogTemp, Warning, TEXT("No Assembly/Config")); return; }
-	for (const FRobotPartSpec& S : Assembly->AssemblyConfig->Parts) { UE_LOG(LogTemp, Log, TEXT("Part: %s Parent:%s Socket:%s"), *S.PartName.ToString(), *S.ParentPartName.ToString(), *S.ParentSocketName.ToString()); }
+	if (!Assembly || !Assembly->AssemblyConfig) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Assembly/Config")); return; }
+	for (const FRobotPartSpec& S : Assembly->AssemblyConfig->Parts) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("Part: %s Parent:%s Socket:%s"), *S.PartName.ToString(), *S.ParentPartName.ToString(), *S.ParentSocketName.ToString()); }
 }
 
 void ARobotActor::TraceTest()
 {
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		APawn* P = PC->GetPawn(); if (!P) { UE_LOG(LogTemp, Warning, TEXT("No Pawn")); return; }
+		APawn* P = PC->GetPawn(); if (!P) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Pawn")); return; }
 		if (UInteractionTraceComponent* Trace = P->FindComponentByClass<UInteractionTraceComponent>())
 		{
 			const FVector Start = P->GetActorLocation(); const FVector End = Start + P->GetActorForwardVector() *500.f;
 			DrawDebugLine(GetWorld(), Start, End, FColor::Yellow, false,2.f,0,2.f);
-			UE_LOG(LogTemp, Log, TEXT("TraceTest drew line from %s to %s"), *Start.ToString(), *End.ToString());
+			if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("TraceTest drew line from %s to %s"), *Start.ToString(), *End.ToString());
 		}
 	}
 }
@@ -428,7 +411,7 @@ void ARobotActor::TryBindToPlayerTrace()
 			Trace->OnInteractReleased.AddDynamic(this, &ARobotActor::OnInteractReleased);
 			CachedTrace = Trace;
 			bTraceBound = true;
-			UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound to InteractionTraceComponent."));
+			if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("RobotActor: Bound to InteractionTraceComponent."));
 		}
 	}
 }
@@ -444,9 +427,7 @@ bool ARobotActor::TryDetachUnderCrosshair(bool bDrag, FName* OutPartName)
 	FName Part; if (!Assembly->FindPartNameByComponent(Comp, Part) || Assembly->IsPartDetached(Part)) return false;
 	float Now = GetWorld()->GetTimeSeconds(); if (float* Last = LastDetachTime.Find(Part)) { if (Now - *Last < DetachCooldownSeconds) return false; *Last = Now; } else { LastDetachTime.Add(Part, Now); }
 	ARobotPartActor* NewActor=nullptr; if (!Assembly->DetachPart(Part, NewActor) || !NewActor) return false;
-	// Disable collision on hidden component
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	UE_LOG(LogTemp, Log, TEXT("Direct detach under crosshair: %s"), *Part.ToString());
 	if (OutPartName) *OutPartName = Part;
 	if (bDrag)
 	{
@@ -474,7 +455,7 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 		float Held = GetWorld()->GetTimeSeconds() - InteractPressTime; bInteractCurrentlyHeld = false; bool bWasTap = Held <= TapThreshold;
 		if (bWasTap && DetachMode == EDetachInteractMode::ClickToggleAttach)
 		{
-			float MX, MY; if (PC->GetMousePosition(MX, MY)) { FVector O,D; if (PC->DeprojectScreenPositionToWorld(MX, MY, O, D)) { FHitResult Hit; GetWorld()->LineTraceSingleByChannel(Hit, O, O + D *2000.f, ECC_Visibility); if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(Hit.GetActor())) { FName PartName = PartActor->GetPartName(); Assembly->ReattachPart(PartName, PartActor); if (UStaticMeshComponent* Comp = Assembly->GetPartByName(PartName)) Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly); UE_LOG(LogTemp, Log, TEXT("Direct tap reattach: %s"), *PartName.ToString()); } } }
+			float MX, MY; if (PC->GetMousePosition(MX, MY)) { FVector O,D; if (PC->DeprojectScreenPositionToWorld(MX, MY, O, D)) { FHitResult Hit; GetWorld()->LineTraceSingleByChannel(Hit, O, O + D *2000.f, ECC_Visibility); if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(Hit.GetActor())) { FName PartName = PartActor->GetPartName(); Assembly->ReattachPart(PartName, PartActor); if (UStaticMeshComponent* Comp = Assembly->GetPartByName(PartName)) Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly); } } }
 		}
 		else
 		{
@@ -486,7 +467,6 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 		}
 	}
 
-	// Arrow key nudging while dragging part
 	if (bDraggingPart && DraggedPartActor)
 	{
 		FVector Nudge = FVector::ZeroVector;
@@ -500,7 +480,6 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 		}
 	}
 
-	// Rotation while dragging
 	if (bDraggingPart && DraggedPartActor)
 	{
 		float YawStep =0.f, PitchStep=0.f, RollStep=0.f;
@@ -514,7 +493,6 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 		{
 			FRotator R = DraggedPartActor->GetActorRotation(); R.Yaw += YawStep; R.Pitch += PitchStep; R.Roll += RollStep; DraggedPartActor->SetActorRotation(R);
 		}
-		// Mouse wheel: move along camera forward
 		float Wheel=0.f; Wheel += PC->IsInputKeyDown(EKeys::MouseScrollUp) ? +1.f :0.f; Wheel += PC->IsInputKeyDown(EKeys::MouseScrollDown) ? -1.f :0.f;
 		if (!FMath::IsNearlyZero(Wheel))
 		{
@@ -527,12 +505,15 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 void ARobotActor::StartShowcase()
 {
 	if (!Assembly || !Assembly->AssemblyConfig) return;
+	EndShowcase();
 	ShowcaseOrder.Reset();
 	for (const FRobotPartSpec& Spec : Assembly->AssemblyConfig->Parts) if (Spec.bDetachable && Spec.PartName != Part_Torso) ShowcaseOrder.Add(Spec.PartName);
 	ShowcaseOrder.Sort([](const FName& A, const FName& B){ return A.LexicalLess(B); });
 	ShowcaseOrder.Add(Part_Torso);
 	UWorld* W = GetWorld(); if (!W) return;
-	AOrbitCameraRig* Rig = W->SpawnActor<AOrbitCameraRig>(AOrbitCameraRig::StaticClass(), GetActorLocation()+FVector(500,0,120), FRotator::ZeroRotator);
+	const FVector Center = ComputeSafeOrbitCenter(this);
+	const FVector SpawnLoc = Center + FVector(Radius,0.f,150.f);
+	AOrbitCameraRig* Rig = W->SpawnActor<AOrbitCameraRig>(AOrbitCameraRig::StaticClass(), SpawnLoc, FRotator::ZeroRotator);
 	if (Rig)
 	{
 		Rig->Setup(this,650.f,150.f,30.f);
@@ -554,7 +535,6 @@ void ARobotActor::ShowcaseStep()
 			ARobotPartActor* OutActor=nullptr;
 			if (Assembly->DetachPart(Part, OutActor) && OutActor)
 			{
-				// fan it slightly outward for visibility
 				const FVector Dir = (OutActor->GetActorLocation() - GetActorLocation()).GetSafeNormal();
 				OutActor->SetActorLocation(OutActor->GetActorLocation() + Dir *35.f);
 				if (Assembly->AssemblyConfig->DetachSound) UGameplayStatics::PlaySoundAtLocation(this, Assembly->AssemblyConfig->DetachSound, OutActor->GetActorLocation());
@@ -563,7 +543,6 @@ void ARobotActor::ShowcaseStep()
 		}
 		return;
 	}
-	// Reattach pass
 	if (ShowcaseIndex == ShowcaseOrder.Num())
 	{
 		ShowcaseIndex++;
@@ -576,10 +555,8 @@ void ARobotActor::ShowcaseStep()
 			const FName Part = ShowcaseOrder[i];
 			if (Assembly->IsPartDetached(Part))
 			{
-				// find actor by scanning DetachedParts map via GetPartWorldLocation + nearest actor (simplified by calling TryFreeAttachDraggedPart path not available); call ReattachPart by finding actor from our map is private; we rely on AttachDetachedPartTo by finding parent.
 				USceneComponent* Parent; FName Socket; if (Assembly->GetAttachParentAndSocket(Part, Parent, Socket))
 				{
-					// Find actor by name via brute scan of world actors of class ARobotPartActor
 					for (TActorIterator<ARobotPartActor> It(GetWorld()); It; ++It)
 					{
 						if (It->GetPartName()==Part) { Assembly->ReattachPart(Part, *It); break; }

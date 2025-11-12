@@ -69,17 +69,17 @@ protected:
 	void PollFallbackKeys(float DeltaSeconds);
 	bool TryDetachUnderCrosshair(bool bDrag, FName* OutPartName = nullptr);
 
-private:
-	void ShowcaseStep();
-	void EndShowcase();
+	private:
+		void ShowcaseStep();
+		void EndShowcase();
 
-private:
+	private:
 	FTimerHandle ShowcaseTimer;
 	int32 ShowcaseIndex = -1;
 	TArray<FName> ShowcaseOrder;
 	TWeakObjectPtr<class AOrbitCameraRig> ShowcaseRig;
 
-protected:
+	protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot") TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot") TObjectPtr<URobotArmComponent> Arm;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot") TObjectPtr<UHighlightComponent> Highlight;
@@ -140,7 +140,17 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Robot|Preview") FLinearColor PreviewSnapColorGood = FLinearColor::Green;
 	UPROPERTY(EditAnywhere, Category="Robot|Preview") FLinearColor PreviewSnapColorBad = FLinearColor::Red;
 	UPROPERTY(EditAnywhere, Category="Robot|Preview") float MouseWheelDistanceStep =40.f; // cm per wheel notch toward/away camera
+	// Allow disabling the visual indicator entirely
+	UPROPERTY(EditAnywhere, Category="Robot|Preview") bool bShowSnapPreviewIndicator = false;
 
 	UPROPERTY(EditAnywhere, Category="Showcase") bool bShowcaseUseSpline = true;
 	UPROPERTY(EditAnywhere, Category="Showcase") int32 ShowcaseSplinePoints =16;
+	UPROPERTY(EditAnywhere, Category="Showcase") float ShowcaseOrbitRadius =650.f;
+	UPROPERTY(EditAnywhere, Category="Showcase") float ShowcaseOrbitHeight =150.f;
+	UPROPERTY(EditAnywhere, Category="Showcase") float ShowcaseOrbitSpeedDeg =30.f;
+	UPROPERTY(EditAnywhere, Category="Showcase") float ShowcaseDetachInterval =0.6f;
+	UPROPERTY(EditAnywhere, Category="Showcase") float ShowcaseInitialDelay =0.5f;
+
+	// Quiet noisy logs unless enabled
+	UPROPERTY(EditAnywhere, Category="Debug") bool bEnableRobotDebugLogs = false;
 };

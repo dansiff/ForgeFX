@@ -191,7 +191,14 @@ bool UAssemblyBuilderComponent::DetachPart(FName PartName, ARobotPartActor*& Out
 	OutActor->InitializePart(PartName, Mesh, Materials);
 	OutActor->GetMeshComponent()->SetCollisionProfileName(Spec.DetachedCollisionProfile);
 	OutActor->EnablePhysics(Spec.bSimulatePhysicsWhenDetached);
-	Comp->SetVisibility(false, true); Comp->SetHiddenInGame(true);
+	// Hide original and disable collision + highlight
+	Comp->SetHiddenInGame(true);
+	Comp->SetVisibility(false, true);
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (AssemblyConfig && AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
+	{
+		Comp->SetRenderCustomDepth(false);
+	}
 	DetachedParts.Add(PartName, OutActor);
 	return true;
 }
@@ -203,7 +210,14 @@ bool UAssemblyBuilderComponent::ReattachPart(FName PartName, ARobotPartActor* Pa
 	USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent();
 	else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get();
 	if (!Parent) Parent = GetOwner()->GetRootComponent();
-	Comp->SetHiddenInGame(false); Comp->SetVisibility(true, true);
+	// Restore visual, collision, and highlight state
+	Comp->SetHiddenInGame(false);
+	Comp->SetVisibility(true, true);
+	Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	if (AssemblyConfig && AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
+	{
+		Comp->SetRenderCustomDepth(true);
+	}
 	Comp->AttachToComponent(Parent, FAttachmentTransformRules::SnapToTargetIncludingScale, Spec.ParentSocketName);
 	PartActor->Destroy(); DetachedParts.Remove(PartName); return true;
 }

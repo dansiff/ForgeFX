@@ -68,4 +68,7 @@ protected:
 	UPROPERTY(Transient) TObjectPtr<UUserWidget> CrosshairWidget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") int32 MappingPriority =0;
+
+	// Optional: disable verbose movement logs if needed
+	UPROPERTY(EditAnywhere, Category="Debug") bool bLogMovementAxis = false;
 };

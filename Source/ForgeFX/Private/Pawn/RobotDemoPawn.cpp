@@ -10,7 +10,7 @@
 
 ARobotDemoPawn::ARobotDemoPawn()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true; // enable tick for raw fallback & smoothing
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
@@ -64,7 +64,6 @@ void ARobotDemoPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		UE_LOG(LogTemp, Log, TEXT("Binding inputs on RobotDemoPawn"));
 		if (MoveAction) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
 		if (LookAction) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
 		if (UpDownAction) EIC->BindAction(UpDownAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::UpDown);
@@ -77,49 +76,47 @@ void ARobotDemoPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 void ARobotDemoPawn::Move(const FInputActionValue& Value)
 {
 	const FVector2D Axis = Value.Get<FVector2D>();
-	UE_LOG(LogTemp, VeryVerbose, TEXT("Move axis (%f,%f)"), Axis.X, Axis.Y);
+	if (bLogMovementAxis) UE_LOG(LogTemp, VeryVerbose, TEXT("Move axis (%f,%f)"), Axis.X, Axis.Y);
 	if (!Axis.IsNearlyZero())
 	{
-		AddMovementInput(GetActorForwardVector(), Axis.Y);
-		AddMovementInput(GetActorRightVector(), Axis.X);
+		// Use control rotation for movement direction (flying style)
+		FRotator ControlRot = GetControlRotation(); ControlRot.Pitch =0.f;
+		const FVector Fwd = FRotationMatrix(ControlRot).GetUnitAxis(EAxis::X);
+		const FVector Right = FRotationMatrix(ControlRot).GetUnitAxis(EAxis::Y);
+		AddMovementInput(Fwd, Axis.Y);
+		AddMovementInput(Right, Axis.X);
 	}
 }
 
 void ARobotDemoPawn::Look(const FInputActionValue& Value)
 {
 	const FVector2D Axis = Value.Get<FVector2D>();
-	UE_LOG(LogTemp, VeryVerbose, TEXT("Look axis (%f,%f)"), Axis.X, Axis.Y);
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
 }
 
 void ARobotDemoPawn::BoostOn(const FInputActionValue&)
 {
-	UE_LOG(LogTemp, Log, TEXT("BoostOn"));
 	bBoosting = true; Movement->MaxSpeed = FMath::Max(BaseMaxSpeed * BoostMultiplier,2400.f);
 }
 
 void ARobotDemoPawn::BoostOff(const FInputActionValue&)
 {
-	UE_LOG(LogTemp, Log, TEXT("BoostOff"));
 	bBoosting = false; Movement->MaxSpeed = BaseMaxSpeed;
 }
 
 void ARobotDemoPawn::InteractPress(const FInputActionValue& Value)
 {
-	UE_LOG(LogTemp, Log, TEXT("InteractPress fired"));
 	if (Interaction) Interaction->InteractPressed();
 }
 
 void ARobotDemoPawn::InteractRelease(const FInputActionValue& Value)
 {
-	UE_LOG(LogTemp, Log, TEXT("InteractRelease fired"));
 	if (Interaction) Interaction->InteractReleased();
 }
 
 void ARobotDemoPawn::InteractAltPress(const FInputActionValue& Value)
 {
-	UE_LOG(LogTemp, Log, TEXT("InteractAltPress fired"));
 	if (Interaction) Interaction->InteractAltPressed();
 }
 
@@ -127,7 +124,7 @@ void ARobotDemoPawn::InteractAltPress(const FInputActionValue& Value)
 void ARobotDemoPawn::UpDown(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
-	UE_LOG(LogTemp, VeryVerbose, TEXT("UpDown axis %f"), Axis);
+	if (bLogMovementAxis && !FMath::IsNearlyZero(Axis)) UE_LOG(LogTemp, VeryVerbose, TEXT("UpDown axis %f"), Axis);
 	if (FMath::Abs(Axis) > KINDA_SMALL_NUMBER)
 	{
 		AddMovementInput(FVector::UpVector, Axis);
@@ -150,14 +147,12 @@ void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
 	float Right = (PC->IsInputKeyDown(EKeys::D)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::A)?1.f:0.f);
 	float Up = (PC->IsInputKeyDown(EKeys::SpaceBar)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::LeftControl)?1.f:0.f);
 
-	// Build world-space desired velocity using view yaw
 	FRotator ViewRot = GetControlRotation(); ViewRot.Pitch =0.f; // level for planar move
 	const FVector FwdVec = FRotationMatrix(ViewRot).GetUnitAxis(EAxis::X);
 	const FVector RightVec = FRotationMatrix(ViewRot).GetUnitAxis(EAxis::Y);
 	FVector Desired = FwdVec * Fwd + RightVec * Right + FVector::UpVector * Up;
 	Desired = Desired.GetClampedToMaxSize(1.f);
 
-	// Smooth blend
 	PendingRawInput = FMath::VInterpTo(PendingRawInput, Desired, DeltaSeconds, RawAccelerationBlend);
 	if (!PendingRawInput.IsNearlyZero())
 	{
@@ -167,10 +162,8 @@ void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
 		AddMovementInput(Velocity.GetSafeNormal(), Velocity.Size());
 	}
 
-	// Ensure pawn rotates with controller yaw for intuitive strafing
 	if (Controller)
 	{
 		APawn::bUseControllerRotationYaw = true;
-		// UFloatingPawnMovement has no bOrientRotationToMovement; orientation is controlled by pawn yaw
 	}
 }

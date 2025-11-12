@@ -30,9 +30,12 @@ void UInteractionTraceComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	Params.AddIgnoredActor(Owner);
 	GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
 
-	// Debug draw and log
-	DrawDebugLine(GetWorld(), Start, End, Hit.bBlockingHit ? FColor::Green : FColor::Red, false,0.f,0,1.f);
-	if (Hit.GetActor())
+	// Optional debug
+	if (bDrawDebugTrace)
+	{
+		DrawDebugLine(GetWorld(), Start, End, Hit.bBlockingHit ? FColor::Green : FColor::Red, false,0.f,0,1.f);
+	}
+	if (bLogTraceHits && Hit.GetActor())
 	{
 		UE_LOG(LogTemp, VeryVerbose, TEXT("Trace Hit Actor=%s Comp=%s"), *GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()));
 	}

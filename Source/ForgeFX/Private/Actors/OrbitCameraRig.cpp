@@ -40,7 +40,8 @@ void AOrbitCameraRig::UseCircularSplinePath(int32 NumPoints)
 void AOrbitCameraRig::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (!Target.IsValid()) return;
+	AActor* T = Target.Get(); if (!T) return;
+	const FVector Center = T->GetActorLocation();
 	if (bUseSpline && Spline->GetNumberOfSplinePoints() >0)
 	{
 		const float Speed = SpeedDegPerSec/360.f; // cycles per second
@@ -48,19 +49,18 @@ void AOrbitCameraRig::Tick(float DeltaSeconds)
 		const float Ln = Spline->GetSplineLength();
 		const FVector Pos = Spline->GetLocationAtDistanceAlongSpline(PathT * Ln, ESplineCoordinateSpace::World);
 		SetActorLocation(Pos);
-		SetActorRotation((Target->GetActorLocation() - GetActorLocation()).Rotation());
+		SetActorRotation((Center - GetActorLocation()).Rotation());
 	}
 	else
 	{
 		float DeltaDeg = SpeedDegPerSec * DeltaSeconds;
 		if (bEaseInOutSpeed)
 		{
-			const float T = FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg))); // slow near sides
-			DeltaDeg *= FMath::Lerp(0.6f,1.2f, T);
+			const float Tsin = FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
+			DeltaDeg *= FMath::Lerp(0.6f,1.2f, Tsin);
 		}
 		AngleDeg = FMath::Fmod(AngleDeg + DeltaDeg,360.f);
 		const float Rad = FMath::DegreesToRadians(AngleDeg);
-		const FVector Center = Target->GetActorLocation();
 		const FVector Offset = FVector(FMath::Cos(Rad), FMath::Sin(Rad),0.f) * Radius + FVector(0,0,Height);
 		SetActorLocation(Center + Offset);
 		SetActorRotation((Center - GetActorLocation()).Rotation());
