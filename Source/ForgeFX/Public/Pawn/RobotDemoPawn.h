@@ -24,6 +24,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaSeconds) override; // added
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
@@ -33,6 +34,7 @@ protected:
 	void UpDown(const FInputActionValue& Value);
 	void BoostOn(const FInputActionValue& Value);
 	void BoostOff(const FInputActionValue& Value);
+	void PollRawMovementKeys(float DeltaSeconds); // fallback
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") TObjectPtr<USceneComponent> Root;
@@ -53,6 +55,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BaseMaxSpeed =1200.f;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BoostMultiplier =2.0f;
 	bool bBoosting = false;
+
+	// Raw key polling fallback (six-direction)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") bool bEnableRawKeyMovementFallback = true;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawMoveSpeed =1200.f; // used if axis mapping absent
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawVerticalSpeed =1200.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawAccelerationBlend =10.f; // smoothing factor
+	FVector PendingRawInput = FVector::ZeroVector;
 
 	// Crosshair UI (optional)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI") TSubclassOf<UUserWidget> CrosshairWidgetClass;

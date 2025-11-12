@@ -8,7 +8,42 @@
 
 UAssemblyBuilderComponent::UAssemblyBuilderComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+}
+
+void UAssemblyBuilderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!AssemblyConfig || AssemblyConfig->HighlightMode != EHighlightMode::MaterialParameter) return;
+	const FName Param = AssemblyConfig->HighlightScalarParam;
+	for (auto& Pair : DynamicMIDs)
+	{
+		UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Pair.Key.Get()); if (!Comp) continue;
+		float* Curr = CurrentHighlight.Find(Comp); float* Tgt = TargetHighlight.Find(Comp);
+		const float CurrV = Curr ? *Curr :0.f; const float TgtV = Tgt ? *Tgt :0.f;
+		const float NewV = FMath::FInterpTo(CurrV, TgtV, DeltaTime, HighlightInterpSpeed);
+		CurrentHighlight.Add(Comp, NewV);
+		for (UMaterialInstanceDynamic* MID : Pair.Value.MIDs) if (MID) MID->SetScalarParameterValue(Param, NewV);
+	}
+}
+
+void UAssemblyBuilderComponent::EnsureDynamicMIDs(UStaticMeshComponent* Comp)
+{
+	if (!Comp) return;
+	if (DynamicMIDs.Contains(Comp)) return;
+	FDynamicMIDArray Arr;
+	const int32 NumMats = Comp->GetNumMaterials();
+	for (int32 i=0; i<NumMats; ++i)
+	{
+		UMaterialInterface* Mat = Comp->GetMaterial(i);
+		if (Mat)
+		{
+			UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Mat, this);
+			Comp->SetMaterial(i, MID);
+			Arr.MIDs.Add(MID);
+		}
+	}
+	DynamicMIDs.Add(Comp, MoveTemp(Arr));
 }
 
 void UAssemblyBuilderComponent::ClearAssembly()
@@ -28,11 +63,37 @@ void UAssemblyBuilderComponent::ClearAssembly()
 	DetachEnabledOverride.Empty();
 }
 
+void UAssemblyBuilderComponent::ApplyHighlightScalar(float Value)
+{
+	if (!AssemblyConfig || AssemblyConfig->HighlightMode != EHighlightMode::MaterialParameter) return;
+	for (auto& Pair : DynamicMIDs)
+	{
+		UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Pair.Key.Get()); if (!Comp) continue;
+		TargetHighlight.Add(Comp, Value);
+	}
+}
+
+void UAssemblyBuilderComponent::ApplyHighlightScalarAll(float Value)
+{
+	// Alias to ApplyHighlightScalar for smooth interpolation
+	ApplyHighlightScalar(Value);
+}
+
+void UAssemblyBuilderComponent::ApplyHighlightScalarToParts(const TArray<FName>& PartNames, float Value)
+{
+	if (!AssemblyConfig || AssemblyConfig->HighlightMode != EHighlightMode::MaterialParameter) return;
+	TSet<FName> Set(PartNames);
+	for (auto& Pair : DynamicMIDs)
+	{
+		UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Pair.Key.Get()); if (!Comp) continue;
+		FName PartName = NAME_None; if (FName* N = ComponentToName.Find(Comp)) PartName = *N;
+		TargetHighlight.Add(Comp, Set.Contains(PartName) ? Value :0.f);
+	}
+}
+
 void UAssemblyBuilderComponent::BuildAssembly()
 {
-	ClearAssembly();
-	if (!AssemblyConfig) return;
-
+	ClearAssembly(); if (!AssemblyConfig) return;
 	for (const FRobotPartSpec& Spec : AssemblyConfig->Parts)
 	{
 		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(GetOwner());
@@ -40,23 +101,20 @@ void UAssemblyBuilderComponent::BuildAssembly()
 		Comp->RegisterComponent();
 		Comp->SetStaticMesh(Spec.Mesh.LoadSynchronous());
 		Comp->SetRelativeTransform(Spec.RelativeTransform);
-
+		Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Comp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Comp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 		if (AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
 		{
 			Comp->SetRenderCustomDepth(true);
 			Comp->SetCustomDepthStencilValue(AssemblyConfig->CustomDepthStencilValue);
 			Comp->MarkRenderStateDirty();
 		}
-
-		USceneComponent* Parent = nullptr;
-		if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent();
-		else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get();
-		if (!Parent) Parent = GetOwner()->GetRootComponent();
-
+		EnsureDynamicMIDs(Comp);
+		CurrentHighlight.Add(Comp,0.f); TargetHighlight.Add(Comp,0.f);
+		USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent(); else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get(); if (!Parent) Parent = GetOwner()->GetRootComponent();
 		Comp->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform, Spec.ParentSocketName);
-		NameToComponent.Add(Spec.PartName, Comp);
-		ComponentToName.Add(Comp, Spec.PartName);
-		PartAffectsHighlight.Add(Spec.PartName, Spec.bAffectsHighlight);
+		NameToComponent.Add(Spec.PartName, Comp); ComponentToName.Add(Comp, Spec.PartName); PartAffectsHighlight.Add(Spec.PartName, Spec.bAffectsHighlight);
 	}
 }
 
@@ -87,54 +145,6 @@ bool UAssemblyBuilderComponent::GetAttachParentAndSocket(FName PartName, USceneC
 	else if (const TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(SpecTemp.ParentPartName)) OutParent = Found->Get();
 	if (!OutParent) OutParent = GetOwner()->GetRootComponent();
 	OutSocket = SpecTemp.ParentSocketName; return true;
-}
-
-void UAssemblyBuilderComponent::EnsureDynamicMIDs(UStaticMeshComponent* Comp)
-{
-	if (!Comp || DynamicMIDs.Contains(Comp)) return;
-	FDynamicMIDArray Array; const int32 MatCount = Comp->GetNumMaterials(); Array.MIDs.Reserve(MatCount);
-	for (int32 Index =0; Index < MatCount; ++Index)
-	{
-		UMaterialInterface* Mat = Comp->GetMaterial(Index);
-		UMaterialInstanceDynamic* MID = Comp->CreateAndSetMaterialInstanceDynamicFromMaterial(Index, Mat);
-		Array.MIDs.Add(MID);
-	}
-	DynamicMIDs.Add(Comp, Array);
-}
-
-void UAssemblyBuilderComponent::ApplyHighlightScalar(float Value)
-{
-	if (!AssemblyConfig || AssemblyConfig->HighlightMode != EHighlightMode::MaterialParameter) return;
-	const FName Param = AssemblyConfig->HighlightScalarParam;
-	for (auto& Pair : NameToComponent)
-	{
-		if (!PartAffectsHighlight.FindRef(Pair.Key)) continue;
-		UStaticMeshComponent* Comp = Pair.Value.Get(); EnsureDynamicMIDs(Comp);
-		if (FDynamicMIDArray* Array = DynamicMIDs.Find(Comp)) for (UMaterialInstanceDynamic* MID : Array->MIDs) if (MID) MID->SetScalarParameterValue(Param, Value);
-	}
-}
-
-void UAssemblyBuilderComponent::ApplyHighlightScalarAll(float Value)
-{
-	if (!AssemblyConfig) return; const FName Param = AssemblyConfig->HighlightScalarParam;
-	for (auto& Pair : NameToComponent)
-	{
-		UStaticMeshComponent* Comp = Pair.Value.Get(); EnsureDynamicMIDs(Comp);
-		if (FDynamicMIDArray* Array = DynamicMIDs.Find(Comp)) for (UMaterialInstanceDynamic* MID : Array->MIDs) if (MID) MID->SetScalarParameterValue(Param, Value);
-	}
-}
-
-void UAssemblyBuilderComponent::ApplyHighlightScalarToParts(const TArray<FName>& PartNames, float Value)
-{
-	if (!AssemblyConfig) return; const FName Param = AssemblyConfig->HighlightScalarParam;
-	for (const FName Part : PartNames)
-	{
-		if (UStaticMeshComponent* Comp = GetPartByName(Part))
-		{
-			EnsureDynamicMIDs(Comp);
-			if (FDynamicMIDArray* Array = DynamicMIDs.Find(Comp)) for (UMaterialInstanceDynamic* MID : Array->MIDs) if (MID) MID->SetScalarParameterValue(Param, Value);
-		}
-	}
 }
 
 bool UAssemblyBuilderComponent::SetPartVisibility(FName PartName, bool bVisible)
@@ -246,6 +256,24 @@ void UAssemblyBuilderComponent::GetAllAttachTargets(TArray<USceneComponent*>& Ou
 bool UAssemblyBuilderComponent::IsDetachable(FName PartName) const
 {
 	return IsDetachableNow(PartName);
+}
+
+void UAssemblyBuilderComponent::RebuildAssembly()
+{
+	UE_LOG(LogTemp, Log, TEXT("AssemblyBuilder: RebuildAssembly invoked"));
+	BuildAssembly();
+	for (const auto& Pair : NameToComponent)
+	{
+		UE_LOG(LogTemp, Log, TEXT("AssemblyBuilder: Registered Part %s Component %s"), *Pair.Key.ToString(), *GetNameSafe(Pair.Value.Get()));
+	}
+	if (AssemblyConfig)
+	{
+		UE_LOG(LogTemp, Log, TEXT("AssemblyBuilder: DataAsset Parts=%d"), AssemblyConfig->Parts.Num());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AssemblyBuilder: No AssemblyConfig assigned"));
+	}
 }
 
 bool UAssemblyBuilderComponent::IsDetachEnabled(FName PartName) const

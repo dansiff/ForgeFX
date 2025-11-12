@@ -2,6 +2,7 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
+#include "DrawDebugHelpers.h"
 
 UInteractionTraceComponent::UInteractionTraceComponent()
 {
@@ -28,6 +29,13 @@ void UInteractionTraceComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(InteractionTrace), false);
 	Params.AddIgnoredActor(Owner);
 	GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+
+	// Debug draw and log
+	DrawDebugLine(GetWorld(), Start, End, Hit.bBlockingHit ? FColor::Green : FColor::Red, false,0.f,0,1.f);
+	if (Hit.GetActor())
+	{
+		UE_LOG(LogTemp, VeryVerbose, TEXT("Trace Hit Actor=%s Comp=%s"), *GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()));
+	}
 
 	TWeakInterfacePtr<IInteractable> NewHover;
 	UPrimitiveComponent* NewComp = nullptr;

@@ -26,8 +26,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void BuildAssembly();
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ClearAssembly();
 
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalar(float Value);
-	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalarAll(float Value);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalar(float Value); // all
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalarAll(float Value); // alias
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void ApplyHighlightScalarToParts(const TArray<FName>& PartNames, float Value);
 
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool SetPartVisibility(FName PartName, bool bVisible);
@@ -38,22 +38,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPart(FName PartName, ARobotPartActor*& OutActor);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPart(FName PartName, ARobotPartActor* PartActor);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsPartDetached(FName PartName) const { return DetachedParts.Contains(PartName); }
-
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetPartSpec(FName PartName, FRobotPartSpec& OutSpec) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetAttachParentAndSocket(FName PartName, USceneComponent*& OutParent, FName& OutSocket) const;
-
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForParts(const TArray<FName>& PartNames, bool bEnabled);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") void SetDetachEnabledForAll(bool bEnabled);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachEnabled(FName PartName) const;
-
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName);
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") void GetAllAttachTargets(TArray<USceneComponent*>& OutTargets) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachable(FName PartName) const;
+	UFUNCTION(Exec) void RebuildAssembly();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
 
+	// Highlight smoothing speed (units per second toward target value)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Highlight") float HighlightInterpSpeed =12.f;
+
 protected:
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	bool IsDetachableNow(FName PartName) const;
 
 private:
@@ -65,6 +67,9 @@ private:
 	UPROPERTY(Transient) TMap<FName, bool> DetachEnabledOverride;
 	UPROPERTY(Transient) TMap<FName, TWeakObjectPtr<USceneComponent>> ParentOverride;
 	UPROPERTY(Transient) TMap<FName, FName> SocketOverride;
+	// Highlight interpolation maps
+	TMap<TWeakObjectPtr<UStaticMeshComponent>, float> CurrentHighlight;
+	TMap<TWeakObjectPtr<UStaticMeshComponent>, float> TargetHighlight;
 
 	void EnsureDynamicMIDs(UStaticMeshComponent* Comp);
 };

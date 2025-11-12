@@ -4,6 +4,7 @@
 #include "Engine/DataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "NiagaraSystem.h"
+#include "Sound/SoundBase.h"
 #include "RobotAssemblyConfig.generated.h"
 
 UENUM(BlueprintType)
@@ -71,9 +72,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly")
 	TArray<FRobotPartSpec> Parts;
 
-	// Optional global effect for detach (can be overridden per-part in BP)
+	// Global effects and audio
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|VFX")
 	TObjectPtr<UNiagaraSystem> DetachEffect = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|VFX")
+	TObjectPtr<UNiagaraSystem> AttachEffect = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Audio")
+	TObjectPtr<USoundBase> DetachSound = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Audio")
+	TObjectPtr<USoundBase> AttachSound = nullptr;
 
 	// Highlight policy for this project
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Highlight")
