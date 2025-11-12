@@ -35,15 +35,12 @@ void UAssemblyBuilderComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		const FName PartName = Pair.Key;
 		if (UStaticMeshComponent* Comp = GetPartByName(PartName))
 		{
-			if (Comp->IsVisible() || Comp->bVisibleInReflectionCaptures || Comp->bVisibleInRayTracing || Comp->GetVisibleFlag())
-			{
-				Comp->SetHiddenInGame(true);
-				Comp->SetVisibility(false, true);
-				Comp->SetRenderInMainPass(false);
-				Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				Comp->SetRenderCustomDepth(false);
-				Comp->MarkRenderStateDirty();
-			}
+			Comp->SetHiddenInGame(true);
+			Comp->SetVisibility(false, true);
+			Comp->SetRenderInMainPass(false);
+			Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Comp->SetRenderCustomDepth(false);
+			Comp->MarkRenderStateDirty();
 		}
 	}
 }
@@ -331,6 +328,9 @@ void UAssemblyBuilderComponent::DumpState()
 		const FName P = Pair.Key;
 		UStaticMeshComponent* Comp = Pair.Value.Get();
 		if (!Comp) continue;
-		UE_LOG(LogTemp, Log, TEXT("Part=%s Visible=%d HiddenInGame=%d RenderInMainPass=%d Detached=%d"), *P.ToString(), Comp->IsVisible()?1:0, Comp->bHiddenInGame?1:0, Comp->GetRenderInMainPass()?1:0, DetachedParts.Contains(P)?1:0);
+		const bool bDetached = DetachedParts.Contains(P);
+		// We cannot access internal bRenderInMainPass; approximate using visibility and hidden flags.
+		const bool bRenderApprox = Comp->IsVisible() && !Comp->bHiddenInGame;
+		UE_LOG(LogTemp, Log, TEXT("Part=%s Visible=%d HiddenInGame=%d RenderApprox=%d Detached=%d"), *P.ToString(), Comp->IsVisible()?1:0, Comp->bHiddenInGame?1:0, bRenderApprox?1:0, bDetached?1:0);
 	}
 }
