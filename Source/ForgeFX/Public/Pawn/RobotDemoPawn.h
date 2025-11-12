@@ -52,16 +52,19 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> BoostAction;
 
 	// Speed settings
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BaseMaxSpeed =1200.f;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BoostMultiplier =2.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BaseMaxSpeed =800.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float BoostMultiplier =1.5f;
 	bool bBoosting = false;
 
 	// Raw key polling fallback (six-direction)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") bool bEnableRawKeyMovementFallback = true;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawMoveSpeed =1200.f; // used if axis mapping absent
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawVerticalSpeed =1200.f;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawAccelerationBlend =10.f; // smoothing factor
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawMoveSpeed =800.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawVerticalSpeed =600.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Movement") float RawAccelerationBlend =6.f; // smoothing factor (lower = smoother)
 	FVector PendingRawInput = FVector::ZeroVector;
+
+	// Raw interact fallback (only if no Enhanced Input action set)
+	UPROPERTY(EditAnywhere, Category="Input") bool bEnableRawInteractFallback = true;
 
 	// Crosshair UI (optional)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI") TSubclassOf<UUserWidget> CrosshairWidgetClass;

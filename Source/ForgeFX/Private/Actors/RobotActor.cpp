@@ -13,6 +13,7 @@
 #include "Components/SphereComponent.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+#include "DrawDebugHelpers.h"
 
 namespace { static const FName Part_Torso(TEXT("Torso")); }
 
@@ -545,4 +546,18 @@ void ARobotActor::EndShowcase()
 	}
 	if (ShowcaseRig.IsValid()) { ShowcaseRig->Destroy(); ShowcaseRig.Reset(); }
 	if (ShowcaseWidget) { ShowcaseWidget->RemoveFromParent(); ShowcaseWidget = nullptr; }
+}
+
+void ARobotActor::TraceTest()
+{
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		APawn* P = PC->GetPawn(); if (!P) { UE_LOG(LogTemp, Warning, TEXT("TraceTest: No Pawn")); return; }
+		if (UInteractionTraceComponent* Trace = P->FindComponentByClass<UInteractionTraceComponent>())
+		{
+			const FVector Start = P->GetActorLocation();
+			const FVector End = Start + P->GetActorForwardVector() *500.f;
+			DrawDebugLine(GetWorld(), Start, End, FColor::Yellow, false,2.f,0,2.f);
+		}
+	}
 }

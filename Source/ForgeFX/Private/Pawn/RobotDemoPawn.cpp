@@ -27,8 +27,8 @@ ARobotDemoPawn::ARobotDemoPawn()
 
 	Movement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("Movement"));
 	Movement->MaxSpeed = BaseMaxSpeed;
-	Movement->Acceleration =4096.f;
-	Movement->Deceleration =4096.f;
+	Movement->Acceleration =1200.f; // softer
+	Movement->Deceleration =1200.f; // softer
 
 	Interaction = CreateDefaultSubobject<UInteractionTraceComponent>(TEXT("Interaction"));
 }
@@ -92,7 +92,6 @@ void ARobotDemoPawn::Move(const FInputActionValue& Value)
 	if (bLogMovementAxis) UE_LOG(LogTemp, VeryVerbose, TEXT("Move axis (%f,%f)"), Axis.X, Axis.Y);
 	if (!Axis.IsNearlyZero())
 	{
-		// Use control rotation for movement direction (flying style)
 		FRotator ControlRot = GetControlRotation(); ControlRot.Pitch =0.f;
 		const FVector Fwd = FRotationMatrix(ControlRot).GetUnitAxis(EAxis::X);
 		const FVector Right = FRotationMatrix(ControlRot).GetUnitAxis(EAxis::Y);
@@ -110,7 +109,7 @@ void ARobotDemoPawn::Look(const FInputActionValue& Value)
 
 void ARobotDemoPawn::BoostOn(const FInputActionValue&)
 {
-	bBoosting = true; Movement->MaxSpeed = FMath::Max(BaseMaxSpeed * BoostMultiplier,2400.f);
+	bBoosting = true; Movement->MaxSpeed = FMath::Max(BaseMaxSpeed * BoostMultiplier,BaseMaxSpeed); // modest boost
 }
 
 void ARobotDemoPawn::BoostOff(const FInputActionValue&)
@@ -133,7 +132,6 @@ void ARobotDemoPawn::InteractAltPress(const FInputActionValue& Value)
 	if (Interaction) Interaction->InteractAltPressed();
 }
 
-// Add missing UpDown implementation
 void ARobotDemoPawn::UpDown(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
@@ -148,6 +146,22 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	PollRawMovementKeys(DeltaSeconds);
+
+	// Raw interact fallback on E/F when Enhanced Input is not configured
+	if (bEnableRawInteractFallback)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(Controller))
+		{
+			if (PC->WasInputKeyJustPressed(EKeys::E) || PC->WasInputKeyJustPressed(EKeys::F))
+			{
+				if (Interaction) Interaction->InteractPressed();
+			}
+			if (PC->WasInputKeyJustReleased(EKeys::E) || PC->WasInputKeyJustReleased(EKeys::F))
+			{
+				if (Interaction) Interaction->InteractReleased();
+			}
+		}
+	}
 }
 
 void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
@@ -155,24 +169,29 @@ void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
 	if (!bEnableRawKeyMovementFallback) return;
 	APlayerController* PC = Cast<APlayerController>(Controller); if (!PC) return;
 
-	// Gather intent: WASD for horizontal plane, Space/Ctrl for vertical
+	// WASD plane, Q up, LeftControl down (avoid E due to interact)
 	float Fwd = (PC->IsInputKeyDown(EKeys::W)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::S)?1.f:0.f);
 	float Right = (PC->IsInputKeyDown(EKeys::D)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::A)?1.f:0.f);
-	float Up = (PC->IsInputKeyDown(EKeys::SpaceBar)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::LeftControl)?1.f:0.f);
+	float Up = (PC->IsInputKeyDown(EKeys::Q)?1.f:0.f) - (PC->IsInputKeyDown(EKeys::LeftControl)?1.f:0.f);
 
-	FRotator ViewRot = GetControlRotation(); ViewRot.Pitch =0.f; // level for planar move
+	FRotator ViewRot = GetControlRotation(); ViewRot.Pitch =0.f;
 	const FVector FwdVec = FRotationMatrix(ViewRot).GetUnitAxis(EAxis::X);
 	const FVector RightVec = FRotationMatrix(ViewRot).GetUnitAxis(EAxis::Y);
 	FVector Desired = FwdVec * Fwd + RightVec * Right + FVector::UpVector * Up;
 	Desired = Desired.GetClampedToMaxSize(1.f);
 
 	PendingRawInput = FMath::VInterpTo(PendingRawInput, Desired, DeltaSeconds, RawAccelerationBlend);
+
+	// Feed normalized input into movement component; MaxSpeed governs actual speed
 	if (!PendingRawInput.IsNearlyZero())
 	{
-		const float HorzSpeed = bBoosting ? BaseMaxSpeed * BoostMultiplier : BaseMaxSpeed;
-		const float VertSpeed = bBoosting ? RawVerticalSpeed * BoostMultiplier : RawVerticalSpeed;
-		const FVector Velocity = (FwdVec * PendingRawInput.X + RightVec * PendingRawInput.Y) * HorzSpeed + FVector::UpVector * PendingRawInput.Z * VertSpeed;
-		AddMovementInput(Velocity.GetSafeNormal(), Velocity.Size());
+		// project PendingRawInput onto local axes again to provide inputs
+		const float FwdAmt = FVector::DotProduct(PendingRawInput, FwdVec);
+		const float RightAmt = FVector::DotProduct(PendingRawInput, RightVec);
+		const float UpAmt = FVector::DotProduct(PendingRawInput, FVector::UpVector);
+		AddMovementInput(FwdVec, FwdAmt);
+		AddMovementInput(RightVec, RightAmt);
+		AddMovementInput(FVector::UpVector, UpAmt);
 	}
 
 	if (Controller)
