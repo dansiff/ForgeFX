@@ -22,6 +22,12 @@ class FORGEFX_API ARobotDemoPawn : public APawn
 public:
 	ARobotDemoPawn();
 
+	// Console helpers (no selection needed)
+	UFUNCTION(Exec) void DumpAssemblyStateAll();
+	UFUNCTION(Exec) void EnforceHideForDetachedAll();
+	UFUNCTION(Exec) void StartShowcaseAll();
+	UFUNCTION(Exec) void StopShowcaseAll();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;

@@ -1,6 +1,7 @@
 #include "Components/AssemblyBuilderComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Actors/RobotPartActor.h"
@@ -116,25 +117,49 @@ void UAssemblyBuilderComponent::BuildAssembly()
 	ClearAssembly(); if (!AssemblyConfig) return;
 	for (const FRobotPartSpec& Spec : AssemblyConfig->Parts)
 	{
-		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(GetOwner());
-		Comp->SetMobility(EComponentMobility::Movable);
-		Comp->RegisterComponent();
-		Comp->SetStaticMesh(Spec.Mesh.LoadSynchronous());
-		Comp->SetRelativeTransform(Spec.RelativeTransform);
-		Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		Comp->SetCollisionResponseToAllChannels(ECR_Ignore);
-		Comp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-		if (AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
-		{
-			Comp->SetRenderCustomDepth(true);
-			Comp->SetCustomDepthStencilValue(AssemblyConfig->CustomDepthStencilValue);
-			Comp->MarkRenderStateDirty();
-		}
-		EnsureDynamicMIDs(Comp);
-		CurrentHighlight.Add(Comp,0.f); TargetHighlight.Add(Comp,0.f);
 		USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent(); else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get(); if (!Parent) Parent = GetOwner()->GetRootComponent();
-		Comp->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform, Spec.ParentSocketName);
-		NameToComponent.Add(Spec.PartName, Comp); ComponentToName.Add(Comp, Spec.PartName); PartAffectsHighlight.Add(Spec.PartName, Spec.bAffectsHighlight);
+
+		if (bUseInstancedComponents)
+		{
+			UInstancedStaticMeshComponent* ISMC = NewObject<UInstancedStaticMeshComponent>(GetOwner());
+			ISMC->SetMobility(EComponentMobility::Movable);
+			ISMC->SetStaticMesh(Spec.Mesh.LoadSynchronous());
+			ISMC->RegisterComponent();
+			ISMC->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform, Spec.ParentSocketName);
+			const int32 Index = ISMC->AddInstance(Spec.RelativeTransform);
+			// collision for hit-testing
+			ISMC->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			ISMC->SetCollisionResponseToAllChannels(ECR_Ignore);
+			ISMC->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+			// Store as if it were a static mesh component for lookups (cast at use sites accordingly)
+			UStaticMeshComponent* AsStatic = Cast<UStaticMeshComponent>(ISMC);
+			NameToComponent.Add(Spec.PartName, AsStatic);
+			ComponentToName.Add(AsStatic, Spec.PartName);
+			PartAffectsHighlight.Add(Spec.PartName, Spec.bAffectsHighlight);
+			// no dynamic MIDs path for ISMC here (material parameter highlight would need per-instance data)
+			CurrentHighlight.Add(AsStatic,0.f); TargetHighlight.Add(AsStatic,0.f);
+		}
+		else
+		{
+			UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(GetOwner());
+			Comp->SetMobility(EComponentMobility::Movable);
+			Comp->RegisterComponent();
+			Comp->SetStaticMesh(Spec.Mesh.LoadSynchronous());
+			Comp->SetRelativeTransform(Spec.RelativeTransform);
+			Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			Comp->SetCollisionResponseToAllChannels(ECR_Ignore);
+			Comp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+			if (AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
+			{
+				Comp->SetRenderCustomDepth(true);
+				Comp->SetCustomDepthStencilValue(AssemblyConfig->CustomDepthStencilValue);
+				Comp->MarkRenderStateDirty();
+			}
+			EnsureDynamicMIDs(Comp);
+			CurrentHighlight.Add(Comp,0.f); TargetHighlight.Add(Comp,0.f);
+			Comp->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform, Spec.ParentSocketName);
+			NameToComponent.Add(Spec.PartName, Comp); ComponentToName.Add(Comp, Spec.PartName); PartAffectsHighlight.Add(Spec.PartName, Spec.bAffectsHighlight);
+		}
 	}
 }
 
@@ -211,15 +236,14 @@ bool UAssemblyBuilderComponent::DetachPart(FName PartName, ARobotPartActor*& Out
 	OutActor->InitializePart(PartName, Mesh, Materials);
 	OutActor->GetMeshComponent()->SetCollisionProfileName(Spec.DetachedCollisionProfile);
 	OutActor->EnablePhysics(Spec.bSimulatePhysicsWhenDetached);
-	// Hide original definitively and disable collision + highlight
+	// Hide/disable original
 	Comp->SetHiddenInGame(true);
 	Comp->SetVisibility(false, true);
-	Comp->SetRenderInMainPass(false);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	if (AssemblyConfig && AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
-	{
-		Comp->SetRenderCustomDepth(false);
-	}
+	Comp->SetRenderCustomDepth(false);
+	Comp->SetCastShadow(false);
+	Comp->SetReceivesDecals(false);
+	Comp->SetComponentTickEnabled(false);
 	Comp->MarkRenderStateDirty();
 	DetachedParts.Add(PartName, OutActor);
 	return true;
@@ -232,16 +256,14 @@ bool UAssemblyBuilderComponent::ReattachPart(FName PartName, ARobotPartActor* Pa
 	USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent();
 	else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get();
 	if (!Parent) Parent = GetOwner()->GetRootComponent();
-	if (Parent == Comp) { Parent = GetOwner()->GetRootComponent(); } // avoid self-attach
-	// Restore visual, collision, and highlight state
+	if (Parent == Comp) { Parent = GetOwner()->GetRootComponent(); }
+	// Restore original
 	Comp->SetHiddenInGame(false);
 	Comp->SetVisibility(true, true);
-	Comp->SetRenderInMainPass(true);
 	Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	if (AssemblyConfig && AssemblyConfig->HighlightMode == EHighlightMode::CustomDepthStencil)
-	{
-		Comp->SetRenderCustomDepth(true);
-	}
+	Comp->SetCastShadow(true);
+	Comp->SetReceivesDecals(true);
+	Comp->SetComponentTickEnabled(true);
 	Comp->AttachToComponent(Parent, FAttachmentTransformRules::SnapToTargetIncludingScale, Spec.ParentSocketName);
 	Comp->MarkRenderStateDirty();
 	PartActor->Destroy(); DetachedParts.Remove(PartName); return true;

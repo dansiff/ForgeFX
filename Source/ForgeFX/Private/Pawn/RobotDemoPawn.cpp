@@ -208,3 +208,20 @@ void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
 		APawn::bUseControllerRotationYaw = true;
 	}
 }
+
+void ARobotDemoPawn::DumpAssemblyStateAll()
+{
+	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->DumpAssemblyState(); }
+}
+void ARobotDemoPawn::EnforceHideForDetachedAll()
+{
+	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->EnforceHideForDetached(); }
+}
+void ARobotDemoPawn::StartShowcaseAll()
+{
+	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StartShowcase(); }
+}
+void ARobotDemoPawn::StopShowcaseAll()
+{
+	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StopShowcase(); }
+}

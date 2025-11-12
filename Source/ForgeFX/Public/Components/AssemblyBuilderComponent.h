@@ -8,6 +8,7 @@
 
 class UMaterialInstanceDynamic;
 class ARobotPartActor;
+class UInstancedStaticMeshComponent;
 
 USTRUCT()
 struct FORGEFX_API FDynamicMIDArray
@@ -49,6 +50,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachable(FName PartName) const;
 	UFUNCTION(Exec) void RebuildAssembly();
 	UFUNCTION(Exec) void DumpState();
+
+	// Optional: use Instanced Static Mesh Components for parts (coexists with current system). One ISMC per part, one instance.
+	UPROPERTY(EditAnywhere, Category="Robot|Assembly") bool bUseInstancedComponents = false;
 
 	// Optional: strong hover override via material swap
 	UPROPERTY(EditAnywhere, Category="Robot|Highlight") bool bUseHoverHighlightMaterial = true;
