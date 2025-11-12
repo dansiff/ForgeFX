@@ -151,10 +151,15 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 
 	if (APlayerController* PC = Cast<APlayerController>(Controller))
 	{
-		// Showcase trigger
-		if (PC->WasInputKeyJustPressed(EKeys::K))
+		// Showcase trigger (toggle)
+		if (PC->WasInputKeyJustPressed(EKeys::K) || PC->WasInputKeyJustPressed(EKeys::SpaceBar))
 		{
-			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StartShowcase(); break; }
+			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+			{
+				if (PC->WasInputKeyJustPressed(EKeys::K)) { It->StartShowcase(); }
+				else { It->StopShowcase(); }
+				break;
+			}
 		}
 		// Raw interact fallback: E to place/snap held part if not handled by Enhanced Input
 		if (bEnableRawInteractFallback && PC->WasInputKeyJustPressed(EKeys::E))

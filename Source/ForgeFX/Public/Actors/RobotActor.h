@@ -80,6 +80,7 @@ protected:
 	int32 ShowcaseIndex = -1;
 	TArray<FName> ShowcaseOrder;
 	TWeakObjectPtr<class AOrbitCameraRig> ShowcaseRig;
+	bool bShowcaseActive = false;
 
 	protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Robot") TObjectPtr<USceneComponent> Root;
@@ -164,4 +165,5 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Debug") bool bEnableRobotDebugLogs = false;
 
 	UFUNCTION(BlueprintCallable, Category="Robot|Interact") void ForceDropHeldPart(bool bTrySnap=true);
+	UFUNCTION(BlueprintCallable, Category="Showcase") void StopShowcase();
 };

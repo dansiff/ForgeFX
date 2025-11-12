@@ -463,6 +463,7 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 void ARobotActor::StartShowcase()
 {
 	if (!Assembly || !Assembly->AssemblyConfig) return;
+	if (bShowcaseActive) { EndShowcase(); }
 	EndShowcase();
 	ShowcaseOrder.Reset();
 	for (const FRobotPartSpec& Spec : Assembly->AssemblyConfig->Parts)
@@ -472,78 +473,35 @@ void ARobotActor::StartShowcase()
 			ShowcaseOrder.Add(Spec.PartName);
 		}
 	}
-	if (ShowcaseOrder.Num()==0)
-	{
-		return; // nothing to show
-	}
+	if (ShowcaseOrder.Num()==0) { return; }
 	ShowcaseOrder.Sort([](const FName& A, const FName& B){ return A.LexicalLess(B); });
 	ShowcaseOrder.Add(Part_Torso);
 
 	UWorld* W = GetWorld(); if (!W) return;
 	const FVector Center = ComputeSafeOrbitCenter(this);
 	const FVector SpawnLoc = Center + FVector(ShowcaseOrbitRadius,0.f,ShowcaseOrbitHeight);
-	AOrbitCameraRig* Rig = W->SpawnActor<AOrbitCameraRig>(AOrbitCameraRig::StaticClass(), SpawnLoc, FRotator::ZeroRotator);
-	if (Rig)
+	if (!ShowcaseRig.IsValid())
 	{
-		Rig->Setup(this, ShowcaseOrbitRadius, ShowcaseOrbitHeight, ShowcaseOrbitSpeedDeg);
-		Rig->bAutoOrbit = false; // manual only unless toggled in details
-		if (bShowcaseUseSpline) Rig->UseCircularSplinePath(ShowcaseSplinePoints);
-		ShowcaseRig = Rig;
+		ShowcaseRig = W->SpawnActor<AOrbitCameraRig>(AOrbitCameraRig::StaticClass(), SpawnLoc, FRotator::ZeroRotator);
+	}
+	if (ShowcaseRig.IsValid())
+	{
+		ShowcaseRig->Setup(this, ShowcaseOrbitRadius, ShowcaseOrbitHeight, ShowcaseOrbitSpeedDeg);
+		ShowcaseRig->bAutoOrbit = false;
+		if (bShowcaseUseSpline) ShowcaseRig->UseCircularSplinePath(ShowcaseSplinePoints);
 		if (APlayerController* PC = W->GetFirstPlayerController())
 		{
-			FViewTargetTransitionParams Blend; Blend.BlendTime =0.5f; PC->SetViewTarget(Rig, Blend);
+			FViewTargetTransitionParams Blend; Blend.BlendTime =0.35f; PC->SetViewTarget(ShowcaseRig.Get(), Blend);
+			PC->SetIgnoreMoveInput(true); PC->SetIgnoreLookInput(true);
 		}
 	}
+	bShowcaseActive = true;
 	ShowcaseIndex =0; GetWorldTimerManager().SetTimer(ShowcaseTimer, this, &ARobotActor::ShowcaseStep, FMath::Max(ShowcaseDetachInterval,0.25f), true, ShowcaseInitialDelay);
 }
 
-void ARobotActor::ShowcaseStep()
+void ARobotActor::StopShowcase()
 {
-	if (!Assembly || ShowcaseIndex <0) { EndShowcase(); return; }
-	if (ShowcaseIndex < ShowcaseOrder.Num())
-	{
-		const FName Part = ShowcaseOrder[ShowcaseIndex++];
-		if (!Assembly->IsPartDetached(Part))
-		{
-			ARobotPartActor* OutActor=nullptr;
-			if (Assembly->DetachPart(Part, OutActor) && OutActor)
-			{
-				const FVector Dir = (OutActor->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-				OutActor->SetActorLocation(OutActor->GetActorLocation() + Dir *35.f);
-				if (Assembly->AssemblyConfig->DetachSound) UGameplayStatics::PlaySoundAtLocation(this, Assembly->AssemblyConfig->DetachSound, OutActor->GetActorLocation());
-				if (Assembly->AssemblyConfig->DetachEffect) UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), Assembly->AssemblyConfig->DetachEffect, OutActor->GetActorLocation());
-			}
-		}
-		return;
-	}
-	// pause one tick before reattach, then reattach all
-	if (ShowcaseIndex == ShowcaseOrder.Num())
-	{
-		ShowcaseIndex++;
-		return;
-	}
-	if (ShowcaseIndex > ShowcaseOrder.Num())
-	{
-		for (int32 i=0;i<ShowcaseOrder.Num();++i)
-		{
-			const FName Part = ShowcaseOrder[i];
-			if (Assembly->IsPartDetached(Part))
-			{
-				USceneComponent* Parent; FName Socket; if (Assembly->GetAttachParentAndSocket(Part, Parent, Socket))
-				{
-					for (TActorIterator<ARobotPartActor> It(GetWorld()); It; ++It)
-					{
-						if (It->GetPartName()==Part) { Assembly->ReattachPart(Part, *It); break; }
-					}
-					if (Assembly->AssemblyConfig->AttachSound && Parent)
-					{
-						UGameplayStatics::PlaySoundAtLocation(this, Assembly->AssemblyConfig->AttachSound, Parent->GetComponentLocation());
-					}
-				}
-			}
-		}
-		EndShowcase();
-	}
+	EndShowcase();
 }
 
 void ARobotActor::EndShowcase()
@@ -552,10 +510,12 @@ void ARobotActor::EndShowcase()
 	ShowcaseIndex = -1; ShowcaseOrder.Reset();
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
-		FViewTargetTransitionParams Blend; Blend.BlendTime =0.6f; PC->SetViewTarget(this, Blend);
+		FViewTargetTransitionParams Blend; Blend.BlendTime =0.35f; PC->SetViewTarget(this, Blend);
+		PC->SetIgnoreMoveInput(false); PC->SetIgnoreLookInput(false);
 	}
 	if (ShowcaseRig.IsValid()) { ShowcaseRig->Destroy(); ShowcaseRig.Reset(); }
 	if (ShowcaseWidget) { ShowcaseWidget->RemoveFromParent(); ShowcaseWidget = nullptr; }
+	bShowcaseActive = false;
 }
 
 void ARobotActor::TraceTest()
