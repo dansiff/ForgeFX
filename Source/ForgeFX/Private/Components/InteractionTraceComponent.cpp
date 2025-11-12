@@ -22,7 +22,7 @@ void UInteractionTraceComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	if (!Owner) return;
 	UCameraComponent* Cam = Owner->FindComponentByClass<UCameraComponent>();
 	const FVector Start = Cam ? Cam->GetComponentLocation() : Owner->GetActorLocation();
-	const FVector Dir = Cam ? Cam->GetForwardVector() : Owner->GetActorForwardVector();
+	const FVector Dir = (Cam ? Cam->GetForwardVector() : Owner->GetActorForwardVector()).GetSafeNormal();
 	const FVector End = Start + Dir * TraceDistance;
 
 	FHitResult Hit;
@@ -30,7 +30,7 @@ void UInteractionTraceComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	Params.AddIgnoredActor(Owner);
 	GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
 
-	// Optional debug
+	// Optional debug (defaults are off in component defaults)
 	if (bDrawDebugTrace)
 	{
 		DrawDebugLine(GetWorld(), Start, End, Hit.bBlockingHit ? FColor::Green : FColor::Red, false,0.f,0,1.f);
