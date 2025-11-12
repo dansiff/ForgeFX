@@ -177,7 +177,7 @@ bool ARobotActor::TryFreeAttachDraggedPart()
 {
 	if (!bAllowFreeAttach || !Assembly || !DraggedPartActor || DraggedPartName.IsNone()) return false;
 	USceneComponent* Parent = nullptr; FName Socket = NAME_None; float Dist=0.f; // fixed NAME_None
-	if (!Assembly->FindNearestAttachTarget(DraggedPartActor->GetActorLocation(), Parent, Socket, Dist)) return false;
+	if (!Assembly->FindNearestAttachTarget(DraggedPartActor->GetActorLocation(), Parent, Socket, Dist, DraggedPartName)) return false;
 	const float MaxD = (FreeAttachMaxDistance >0.f) ? FreeAttachMaxDistance : AttachPosTolerance;
 	if (Dist > MaxD) return false;
 	Assembly->AttachDetachedPartTo(DraggedPartName, DraggedPartActor, Parent, Socket);
@@ -188,53 +188,29 @@ bool ARobotActor::TryFreeAttachDraggedPart()
 void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AActor* HitActor)
 {
 	if (!Assembly) return;
-
-	// Strong hover: use optional material override if configured
 	Assembly->ClearHoverOverride();
-
-	// Optional: make hover outline obvious via custom depth
-	static TWeakObjectPtr<UPrimitiveComponent> LastHoverOutlineComp;
-	if (LastHoverOutlineComp.IsValid()) { LastHoverOutlineComp->SetRenderCustomDepth(false); }
-	LastHoverOutlineComp.Reset();
-
-	if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
+	static TWeakObjectPtr<UPrimitiveComponent> LastHoverOutlineComp; if (LastHoverOutlineComp.IsValid()) LastHoverOutlineComp->SetRenderCustomDepth(false); LastHoverOutlineComp.Reset();
+	FName PartName = NAME_None;
+	if (HitComponent && Assembly->FindPartNameByComponent(HitComponent, PartName))
 	{
-		Assembly->ApplyHighlightScalarAll(0.f);
-		HoveredPartName = PartActor->GetPartName();
-		if (UStaticMeshComponent* Comp = PartActor->GetMeshComponent())
-		{
-			Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; 
-			Assembly->ApplyHoverOverride(Comp);
-		}
-		return;
+		HoveredPartName = PartName; TArray<FName> One{ PartName }; Assembly->ApplyHighlightScalarToParts(One,1.f);
+		if (UStaticMeshComponent* Comp = Assembly->GetPartByName(PartName)) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; Assembly->ApplyHoverOverride(Comp); }
 	}
-
-	FName Part;
-	if (!HitComponent || !Assembly->FindPartNameByComponent(HitComponent, Part))
+	else if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 	{
-		Assembly->ApplyHighlightScalarAll(0.f);
-		HoveredPartName = NAME_None;
-		return;
-	}
-
-	HoveredPartName = Part;
-	const bool bIsTorso = (Part == Part_Torso);
-	Assembly->ApplyHighlightScalarAll(0.f);
-	if (bIsTorso)
-	{
-		Assembly->ApplyHighlightScalarAll(1.f);
+		HoveredPartName = PartActor->GetPartName(); TArray<FName> One{ HoveredPartName }; Assembly->ApplyHighlightScalarToParts(One,1.f);
+		if (UStaticMeshComponent* Comp = PartActor->GetMeshComponent()) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; Assembly->ApplyHoverOverride(Comp); }
 	}
 	else
 	{
-		TArray<FName> One{ Part }; 
-		Assembly->ApplyHighlightScalarToParts(One,1.f);
-		if (UStaticMeshComponent* Comp = Assembly->GetPartByName(Part)) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; Assembly->ApplyHoverOverride(Comp); }
+		HoveredPartName = NAME_None; Assembly->ApplyHighlightScalarAll(0.f);
 	}
 }
 
 void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* HitActor)
 {
-	if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("OnInteractPressed: HitComp=%s HitActor=%s DetachMode=%d"), *GetNameSafe(HitComponent), *GetNameSafe(HitActor), (int32)DetachMode);
+	// torso drag speed dampening
+	if (bDragging && DetachMode == EDetachInteractMode::HoldToDrag) DragSmoothingSpeed =6.f;
 	if (DetachMode == EDetachInteractMode::ClickToggleAttach)
 	{
 		if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))

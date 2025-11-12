@@ -214,6 +214,7 @@ bool UAssemblyBuilderComponent::ReattachPart(FName PartName, ARobotPartActor* Pa
 	USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent();
 	else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get();
 	if (!Parent) Parent = GetOwner()->GetRootComponent();
+	if (Parent == Comp) { Parent = GetOwner()->GetRootComponent(); } // avoid self-attach
 	// Restore visual, collision, and highlight state
 	Comp->SetHiddenInGame(false);
 	Comp->SetVisibility(true, true);
@@ -233,6 +234,7 @@ bool UAssemblyBuilderComponent::AttachDetachedPartTo(FName PartName, ARobotPartA
 	if (!PartActor || !NewParent) return false;
 	UStaticMeshComponent* Comp = GetPartByName(PartName);
 	if (!Comp) return false;
+	if (NewParent == Comp) { NewParent = GetOwner()->GetRootComponent(); SocketName = NAME_None; } // avoid self-attach
 	Comp->SetHiddenInGame(false);
 	Comp->SetVisibility(true, true);
 	Comp->SetRenderInMainPass(true);
@@ -245,11 +247,13 @@ bool UAssemblyBuilderComponent::AttachDetachedPartTo(FName PartName, ARobotPartA
 	return true;
 }
 
-bool UAssemblyBuilderComponent::FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance) const
+bool UAssemblyBuilderComponent::FindNearestAttachTarget(const FVector& AtWorldLocation, USceneComponent*& OutParent, FName& OutSocket, float& OutDistance, FName ExcludePartName) const
 {
 	OutParent = nullptr; OutSocket = NAME_None; OutDistance = TNumericLimits<float>::Max();
 	for (const auto& Pair : NameToComponent)
 	{
+		const FName ThisPart = Pair.Key;
+		if (ExcludePartName != NAME_None && ThisPart == ExcludePartName) continue; // avoid self
 		UStaticMeshComponent* Comp = Pair.Value.Get(); if (!Comp) continue;
 		{
 			const float D = FVector::Dist(AtWorldLocation, Comp->GetComponentLocation());
