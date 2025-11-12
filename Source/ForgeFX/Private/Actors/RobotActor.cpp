@@ -472,6 +472,10 @@ void ARobotActor::StartShowcase()
 			ShowcaseOrder.Add(Spec.PartName);
 		}
 	}
+	if (ShowcaseOrder.Num()==0)
+	{
+		return; // nothing to show
+	}
 	ShowcaseOrder.Sort([](const FName& A, const FName& B){ return A.LexicalLess(B); });
 	ShowcaseOrder.Add(Part_Torso);
 
@@ -487,10 +491,10 @@ void ARobotActor::StartShowcase()
 		ShowcaseRig = Rig;
 		if (APlayerController* PC = W->GetFirstPlayerController())
 		{
-			FViewTargetTransitionParams Blend; Blend.BlendTime =0.6f; PC->SetViewTarget(Rig, Blend);
+			FViewTargetTransitionParams Blend; Blend.BlendTime =0.5f; PC->SetViewTarget(Rig, Blend);
 		}
 	}
-	ShowcaseIndex =0; GetWorldTimerManager().SetTimer(ShowcaseTimer, this, &ARobotActor::ShowcaseStep, ShowcaseDetachInterval, true, ShowcaseInitialDelay);
+	ShowcaseIndex =0; GetWorldTimerManager().SetTimer(ShowcaseTimer, this, &ARobotActor::ShowcaseStep, FMath::Max(ShowcaseDetachInterval,0.25f), true, ShowcaseInitialDelay);
 }
 
 void ARobotActor::ShowcaseStep()

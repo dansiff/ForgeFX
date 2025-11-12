@@ -48,9 +48,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") void GetAllAttachTargets(TArray<USceneComponent*>& OutTargets) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachable(FName PartName) const;
 	UFUNCTION(Exec) void RebuildAssembly();
+	UFUNCTION(Exec) void DumpState();
 
 	// Optional: strong hover override via material swap
-	UPROPERTY(EditAnywhere, Category="Robot|Highlight") bool bUseHoverHighlightMaterial = false;
+	UPROPERTY(EditAnywhere, Category="Robot|Highlight") bool bUseHoverHighlightMaterial = true;
 	UPROPERTY(EditAnywhere, Category="Robot|Highlight") TObjectPtr<UMaterialInterface> HoverHighlightMaterial;
 	UFUNCTION(BlueprintCallable, Category="Robot|Highlight") void ApplyHoverOverride(UPrimitiveComponent* HoveredComp);
 	UFUNCTION(BlueprintCallable, Category="Robot|Highlight") void ClearHoverOverride();

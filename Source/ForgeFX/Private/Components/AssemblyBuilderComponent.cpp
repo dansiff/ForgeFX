@@ -14,16 +14,37 @@ UAssemblyBuilderComponent::UAssemblyBuilderComponent()
 void UAssemblyBuilderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (!AssemblyConfig || AssemblyConfig->HighlightMode != EHighlightMode::MaterialParameter) return;
-	const FName Param = AssemblyConfig->HighlightScalarParam;
-	for (auto& Pair : DynamicMIDs)
+	// Enforce highlight interpolation if using scalar param
+	if (AssemblyConfig && AssemblyConfig->HighlightMode == EHighlightMode::MaterialParameter)
 	{
-		UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Pair.Key.Get()); if (!Comp) continue;
-		float* Curr = CurrentHighlight.Find(Comp); float* Tgt = TargetHighlight.Find(Comp);
-		const float CurrV = Curr ? *Curr :0.f; const float TgtV = Tgt ? *Tgt :0.f;
-		const float NewV = FMath::FInterpTo(CurrV, TgtV, DeltaTime, HighlightInterpSpeed);
-		CurrentHighlight.Add(Comp, NewV);
-		for (UMaterialInstanceDynamic* MID : Pair.Value.MIDs) if (MID) MID->SetScalarParameterValue(Param, NewV);
+		const FName Param = AssemblyConfig->HighlightScalarParam;
+		for (auto& Pair : DynamicMIDs)
+		{
+			UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Pair.Key.Get()); if (!Comp) continue;
+			float* Curr = CurrentHighlight.Find(Comp); float* Tgt = TargetHighlight.Find(Comp);
+			const float CurrV = Curr ? *Curr :0.f; const float TgtV = Tgt ? *Tgt :0.f;
+			const float NewV = FMath::FInterpTo(CurrV, TgtV, DeltaTime, HighlightInterpSpeed);
+			CurrentHighlight.Add(Comp, NewV);
+			for (UMaterialInstanceDynamic* MID : Pair.Value.MIDs) if (MID) MID->SetScalarParameterValue(Param, NewV);
+		}
+	}
+
+	// Ensure any parts marked detached remain fully hidden on the original component
+	for (const auto& Pair : DetachedParts)
+	{
+		const FName PartName = Pair.Key;
+		if (UStaticMeshComponent* Comp = GetPartByName(PartName))
+		{
+			if (Comp->IsVisible() || Comp->bVisibleInReflectionCaptures || Comp->bVisibleInRayTracing || Comp->GetVisibleFlag())
+			{
+				Comp->SetHiddenInGame(true);
+				Comp->SetVisibility(false, true);
+				Comp->SetRenderInMainPass(false);
+				Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Comp->SetRenderCustomDepth(false);
+				Comp->MarkRenderStateDirty();
+			}
+		}
 	}
 }
 
@@ -302,38 +323,14 @@ void UAssemblyBuilderComponent::RebuildAssembly()
 	}
 }
 
-bool UAssemblyBuilderComponent::IsDetachEnabled(FName PartName) const
+void UAssemblyBuilderComponent::DumpState()
 {
-	return IsDetachableNow(PartName);
-}
-
-void UAssemblyBuilderComponent::ApplyHoverOverride(UPrimitiveComponent* HoveredComp)
-{
-	if (!bUseHoverHighlightMaterial || !HoveredComp || !HoverHighlightMaterial) return;
-	UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(HoveredComp); if (!MeshComp) return;
-	if (CurrentHoverComp.Get() == MeshComp) return;
-	ClearHoverOverride();
-
-	TArray<TObjectPtr<UMaterialInterface>> Originals;
-	Originals.Reserve(MeshComp->GetNumMaterials());
-	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) Originals.Add(MeshComp->GetMaterial(i));
-	SavedMaterials.Add(MeshComp, Originals);
-
-	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) MeshComp->SetMaterial(i, HoverHighlightMaterial);
-	CurrentHoverComp = MeshComp;
-}
-
-void UAssemblyBuilderComponent::ClearHoverOverride()
-{
-	if (!CurrentHoverComp.IsValid()) return;
-	UStaticMeshComponent* MeshComp = CurrentHoverComp.Get();
-	if (TArray<TObjectPtr<UMaterialInterface>>* Originals = SavedMaterials.Find(MeshComp))
+	UE_LOG(LogTemp, Log, TEXT("--- Assembly State ---"));
+	for (const auto& Pair : NameToComponent)
 	{
-		for (int32 i=0;i<MeshComp->GetNumMaterials() && i<Originals->Num(); ++i)
-		{
-			MeshComp->SetMaterial(i, (*Originals)[i]);
-		}
+		const FName P = Pair.Key;
+		UStaticMeshComponent* Comp = Pair.Value.Get();
+		if (!Comp) continue;
+		UE_LOG(LogTemp, Log, TEXT("Part=%s Visible=%d HiddenInGame=%d RenderInMainPass=%d Detached=%d"), *P.ToString(), Comp->IsVisible()?1:0, Comp->bHiddenInGame?1:0, Comp->GetRenderInMainPass()?1:0, DetachedParts.Contains(P)?1:0);
 	}
-	CurrentHoverComp.Reset();
-	SavedMaterials.Remove(MeshComp);
 }

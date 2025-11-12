@@ -8,6 +8,8 @@
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
 #include "GameFramework/PlayerController.h"
+#include "EngineUtils.h"
+#include "Actors/RobotActor.h"
 
 ARobotDemoPawn::ARobotDemoPawn()
 {
@@ -147,18 +149,15 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	PollRawMovementKeys(DeltaSeconds);
 
-	// Raw interact fallback on E/F when Enhanced Input is not configured
-	if (bEnableRawInteractFallback)
+	// Reliable K-to-Showcase: trigger first robot actor in world
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
 	{
-		if (APlayerController* PC = Cast<APlayerController>(Controller))
+		if (PC->WasInputKeyJustPressed(EKeys::K))
 		{
-			if (PC->WasInputKeyJustPressed(EKeys::E) || PC->WasInputKeyJustPressed(EKeys::F))
+			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
 			{
-				if (Interaction) Interaction->InteractPressed();
-			}
-			if (PC->WasInputKeyJustReleased(EKeys::E) || PC->WasInputKeyJustReleased(EKeys::F))
-			{
-				if (Interaction) Interaction->InteractReleased();
+				It->StartShowcase();
+				break;
 			}
 		}
 	}
