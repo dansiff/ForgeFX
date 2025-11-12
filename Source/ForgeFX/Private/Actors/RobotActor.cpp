@@ -571,3 +571,47 @@ void ARobotActor::TraceTest()
 		}
 	}
 }
+
+void ARobotActor::DumpAssemblyState()
+{
+	if (!Assembly) { UE_LOG(LogTemp, Warning, TEXT("DumpAssemblyState: No Assembly")); return; }
+	Assembly->DumpState();
+}
+
+void ARobotActor::EnforceHideForDetached()
+{
+	if (!Assembly) return;
+	// tick path already enforces every frame, but let user force it now
+	for (const auto& Pair : Assembly->AssemblyConfig->Parts)
+	{
+		if (Assembly->IsPartDetached(Pair.PartName))
+		{
+			if (UStaticMeshComponent* Comp = Assembly->GetPartByName(Pair.PartName))
+			{
+				Comp->SetHiddenInGame(true);
+				Comp->SetVisibility(false, true);
+				Comp->SetRenderInMainPass(false);
+				Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Comp->SetRenderCustomDepth(false);
+				Comp->MarkRenderStateDirty();
+			}
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("EnforceHideForDetached applied"));
+}
+
+void ARobotActor::ForceDropHeldPart(bool bTrySnap)
+{
+	if (!bDraggingPart || !DraggedPartActor) return;
+	if (bTrySnap)
+	{
+		if (!TrySnapDraggedPartToSocket())
+		{
+			TryFreeAttachDraggedPart();
+		}
+	}
+	else
+	{
+		bDraggingPart = false; DraggedPartActor = nullptr; DraggedPartName = NAME_None;
+	}
+}

@@ -12,6 +12,7 @@ class UInputMappingContext;
 class UInputAction;
 class UInteractionTraceComponent;
 class UUserWidget;
+class ARobotActor; // forward
 
 UCLASS()
 class FORGEFX_API ARobotDemoPawn : public APawn

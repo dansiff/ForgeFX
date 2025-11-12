@@ -37,6 +37,8 @@ public:
 	UFUNCTION(Exec) void ListRobotParts();
 	UFUNCTION(Exec) void TraceTest();
 	UFUNCTION(Exec) void StartShowcase();
+	UFUNCTION(Exec) void DumpAssemblyState();
+	UFUNCTION(Exec) void EnforceHideForDetached();
 
 	UFUNCTION(BlueprintPure, Category="Robot|Debug") FName GetHoveredPart() const { return HoveredPartName; }
 	UFUNCTION(BlueprintPure, Category="Robot|Debug") EDetachInteractMode GetDetachMode() const { return DetachMode; }
@@ -160,4 +162,6 @@ protected:
 
 	// Quiet noisy logs unless enabled
 	UPROPERTY(EditAnywhere, Category="Debug") bool bEnableRobotDebugLogs = false;
+
+	UFUNCTION(BlueprintCallable, Category="Robot|Interact") void ForceDropHeldPart(bool bTrySnap=true);
 };

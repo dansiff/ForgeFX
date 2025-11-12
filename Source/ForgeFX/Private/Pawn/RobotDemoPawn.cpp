@@ -149,14 +149,19 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	PollRawMovementKeys(DeltaSeconds);
 
-	// Reliable K-to-Showcase: trigger first robot actor in world
 	if (APlayerController* PC = Cast<APlayerController>(Controller))
 	{
+		// Showcase trigger
 		if (PC->WasInputKeyJustPressed(EKeys::K))
+		{
+			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StartShowcase(); break; }
+		}
+		// Raw interact fallback: E to place/snap held part if not handled by Enhanced Input
+		if (bEnableRawInteractFallback && PC->WasInputKeyJustPressed(EKeys::E))
 		{
 			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
 			{
-				It->StartShowcase();
+				It->ForceDropHeldPart(true);
 				break;
 			}
 		}
