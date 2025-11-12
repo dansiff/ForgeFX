@@ -33,6 +33,7 @@ ARobotActor::ARobotActor()
 	PreviewSocketIndicator->InitSphereRadius(PreviewSphereRadius);
 	PreviewSocketIndicator->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	PreviewSocketIndicator->SetVisibility(false, true);
+	PreviewSocketIndicator->SetHiddenInGame(true);
 	PreviewSocketIndicator->SetupAttachment(Root);
 }
 
@@ -55,7 +56,6 @@ void ARobotActor::BeginPlay()
 
 	TryBindToPlayerTrace();
 
-	// Prefer binding actions on the pawn's EnhancedInputComponent
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
 		APawn* P = PC->GetPawn();
@@ -128,12 +128,13 @@ void ARobotActor::Tick(float DeltaSeconds)
 			const bool bSnapSoon = (Dist <= AttachPosTolerance);
 			PreviewSocketIndicator->SetWorldLocation(SocketWorld.GetLocation());
 			PreviewSocketIndicator->SetVisibility(true, true);
+			PreviewSocketIndicator->SetHiddenInGame(false);
 			PreviewSocketIndicator->SetSphereRadius(PreviewSphereRadius);
 			PreviewSocketIndicator->ShapeColor = bSnapSoon ? FColor::Green : FColor::Red;
 		}
-		else { PreviewSocketIndicator->SetVisibility(false, true); }
+		else { PreviewSocketIndicator->SetVisibility(false, true); PreviewSocketIndicator->SetHiddenInGame(true); }
 	}
-	else { PreviewSocketIndicator->SetVisibility(false, true); }
+	else { PreviewSocketIndicator->SetVisibility(false, true); PreviewSocketIndicator->SetHiddenInGame(true); }
 }
 
 bool ARobotActor::ComputeCursorWorldOnPlane(float PlaneZ, FVector& OutWorldPoint) const
@@ -182,10 +183,17 @@ bool ARobotActor::TryFreeAttachDraggedPart()
 void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AActor* HitActor)
 {
 	if (!Assembly) return;
+
+	// Optional: make hover outline obvious via custom depth
+	static TWeakObjectPtr<UPrimitiveComponent> LastHoverOutlineComp;
+	if (LastHoverOutlineComp.IsValid()) { LastHoverOutlineComp->SetRenderCustomDepth(false); }
+	LastHoverOutlineComp.Reset();
+
 	if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 	{
 		Assembly->ApplyHighlightScalarAll(0.f);
 		HoveredPartName = PartActor->GetPartName();
+		if (UStaticMeshComponent* Comp = PartActor->GetMeshComponent()) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; }
 		return;
 	}
 
@@ -208,6 +216,7 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 	{
 		TArray<FName> One{ Part }; 
 		Assembly->ApplyHighlightScalarToParts(One,1.f);
+		if (UStaticMeshComponent* Comp = Assembly->GetPartByName(Part)) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; }
 	}
 }
 
@@ -382,20 +391,6 @@ void ARobotActor::ListRobotParts()
 	for (const FRobotPartSpec& S : Assembly->AssemblyConfig->Parts) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("Part: %s Parent:%s Socket:%s"), *S.PartName.ToString(), *S.ParentPartName.ToString(), *S.ParentSocketName.ToString()); }
 }
 
-void ARobotActor::TraceTest()
-{
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		APawn* P = PC->GetPawn(); if (!P) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Pawn")); return; }
-		if (UInteractionTraceComponent* Trace = P->FindComponentByClass<UInteractionTraceComponent>())
-		{
-			const FVector Start = P->GetActorLocation(); const FVector End = Start + P->GetActorForwardVector() *500.f;
-			DrawDebugLine(GetWorld(), Start, End, FColor::Yellow, false,2.f,0,2.f);
-			if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Log, TEXT("TraceTest drew line from %s to %s"), *Start.ToString(), *End.ToString());
-		}
-	}
-}
-
 void ARobotActor::TryBindToPlayerTrace()
 {
 	if (bTraceBound) return;
@@ -446,60 +441,16 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 	}
 	if (PC->WasInputKeyJustPressed(EKeys::Y)) { ToggleArm(); }
 	if (PC->WasInputKeyJustPressed(EKeys::P)) { ScrambleParts(); }
-	if (PC->WasInputKeyJustPressed(EKeys::E))
+
+	// Manual orbit control during showcase
+	if (ShowcaseRig.IsValid())
 	{
-		InteractPressTime = GetWorld()->GetTimeSeconds(); bInteractCurrentlyHeld = true; bool bDragStart = (DetachMode != EDetachInteractMode::ClickToggleAttach); TryDetachUnderCrosshair(bDragStart);
-	}
-	if (bInteractCurrentlyHeld && PC->WasInputKeyJustReleased(EKeys::E))
-	{
-		float Held = GetWorld()->GetTimeSeconds() - InteractPressTime; bInteractCurrentlyHeld = false; bool bWasTap = Held <= TapThreshold;
-		if (bWasTap && DetachMode == EDetachInteractMode::ClickToggleAttach)
-		{
-			float MX, MY; if (PC->GetMousePosition(MX, MY)) { FVector O,D; if (PC->DeprojectScreenPositionToWorld(MX, MY, O, D)) { FHitResult Hit; GetWorld()->LineTraceSingleByChannel(Hit, O, O + D *2000.f, ECC_Visibility); if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(Hit.GetActor())) { FName PartName = PartActor->GetPartName(); Assembly->ReattachPart(PartName, PartActor); if (UStaticMeshComponent* Comp = Assembly->GetPartByName(PartName)) Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly); } } }
-		}
-		else
-		{
-			if (bDraggingPart && DraggedPartActor)
-			{
-				if (!TrySnapDraggedPartToSocket()) { TryFreeAttachDraggedPart(); }
-			}
-			bDragging = false; DraggedPartActor = nullptr; DraggedPartName = NAME_None; bDraggingPart = false;
-		}
+		float Step =120.f * DeltaSeconds; // deg/sec
+		if (PC->IsInputKeyDown(EKeys::Comma)) { ShowcaseRig->StepManual(-Step); }
+		if (PC->IsInputKeyDown(EKeys::Period)) { ShowcaseRig->StepManual(+Step); }
 	}
 
-	if (bDraggingPart && DraggedPartActor)
-	{
-		FVector Nudge = FVector::ZeroVector;
-		if (PC->IsInputKeyDown(EKeys::Up)) Nudge += FVector::ForwardVector;
-		if (PC->IsInputKeyDown(EKeys::Down)) Nudge += -FVector::ForwardVector;
-		if (PC->IsInputKeyDown(EKeys::Left)) Nudge += -FVector::RightVector;
-		if (PC->IsInputKeyDown(EKeys::Right)) Nudge += FVector::RightVector;
-		if (!Nudge.IsNearlyZero())
-		{
-			DragArrowAccum += Nudge * ArrowNudgeSpeed * DeltaSeconds;
-		}
-	}
-
-	if (bDraggingPart && DraggedPartActor)
-	{
-		float YawStep =0.f, PitchStep=0.f, RollStep=0.f;
-		if (PC->IsInputKeyDown(EKeys::Q)) YawStep -=90.f * DeltaSeconds;
-		if (PC->IsInputKeyDown(EKeys::E)) YawStep +=90.f * DeltaSeconds;
-		if (PC->IsInputKeyDown(EKeys::PageUp)) PitchStep +=90.f * DeltaSeconds;
-		if (PC->IsInputKeyDown(EKeys::PageDown)) PitchStep -=90.f * DeltaSeconds;
-		if (PC->IsInputKeyDown(EKeys::Home)) RollStep +=90.f * DeltaSeconds;
-		if (PC->IsInputKeyDown(EKeys::End)) RollStep -=90.f * DeltaSeconds;
-		if (!FMath::IsNearlyZero(YawStep) || !FMath::IsNearlyZero(PitchStep) || !FMath::IsNearlyZero(RollStep))
-		{
-			FRotator R = DraggedPartActor->GetActorRotation(); R.Yaw += YawStep; R.Pitch += PitchStep; R.Roll += RollStep; DraggedPartActor->SetActorRotation(R);
-		}
-		float Wheel=0.f; Wheel += PC->IsInputKeyDown(EKeys::MouseScrollUp) ? +1.f :0.f; Wheel += PC->IsInputKeyDown(EKeys::MouseScrollDown) ? -1.f :0.f;
-		if (!FMath::IsNearlyZero(Wheel))
-		{
-			FVector CamLoc; FRotator CamRot; PC->GetPlayerViewPoint(CamLoc, CamRot);
-			DragArrowAccum += CamRot.Vector() * (Wheel * MouseWheelDistanceStep);
-		}
-	}
+	// Removed E-key path here to avoid double-firing with InteractionTraceComponent
 }
 
 void ARobotActor::StartShowcase()
@@ -507,21 +458,32 @@ void ARobotActor::StartShowcase()
 	if (!Assembly || !Assembly->AssemblyConfig) return;
 	EndShowcase();
 	ShowcaseOrder.Reset();
-	for (const FRobotPartSpec& Spec : Assembly->AssemblyConfig->Parts) if (Spec.bDetachable && Spec.PartName != Part_Torso) ShowcaseOrder.Add(Spec.PartName);
+	for (const FRobotPartSpec& Spec : Assembly->AssemblyConfig->Parts)
+	{
+		if (Spec.bDetachable && Spec.PartName != Part_Torso)
+		{
+			ShowcaseOrder.Add(Spec.PartName);
+		}
+	}
 	ShowcaseOrder.Sort([](const FName& A, const FName& B){ return A.LexicalLess(B); });
 	ShowcaseOrder.Add(Part_Torso);
+
 	UWorld* W = GetWorld(); if (!W) return;
 	const FVector Center = ComputeSafeOrbitCenter(this);
-	const FVector SpawnLoc = Center + FVector(Radius,0.f,150.f);
+	const FVector SpawnLoc = Center + FVector(ShowcaseOrbitRadius,0.f,ShowcaseOrbitHeight);
 	AOrbitCameraRig* Rig = W->SpawnActor<AOrbitCameraRig>(AOrbitCameraRig::StaticClass(), SpawnLoc, FRotator::ZeroRotator);
 	if (Rig)
 	{
-		Rig->Setup(this,650.f,150.f,30.f);
+		Rig->Setup(this, ShowcaseOrbitRadius, ShowcaseOrbitHeight, ShowcaseOrbitSpeedDeg);
+		Rig->bAutoOrbit = false; // manual only unless toggled in details
 		if (bShowcaseUseSpline) Rig->UseCircularSplinePath(ShowcaseSplinePoints);
 		ShowcaseRig = Rig;
-		if (APlayerController* PC = W->GetFirstPlayerController()) { FViewTargetTransitionParams Blend; Blend.BlendTime =0.6f; PC->SetViewTarget(Rig, Blend); }
+		if (APlayerController* PC = W->GetFirstPlayerController())
+		{
+			FViewTargetTransitionParams Blend; Blend.BlendTime =0.6f; PC->SetViewTarget(Rig, Blend);
+		}
 	}
-	ShowcaseIndex =0; GetWorldTimerManager().SetTimer(ShowcaseTimer, this, &ARobotActor::ShowcaseStep,0.6f, true,0.5f);
+	ShowcaseIndex =0; GetWorldTimerManager().SetTimer(ShowcaseTimer, this, &ARobotActor::ShowcaseStep, ShowcaseDetachInterval, true, ShowcaseInitialDelay);
 }
 
 void ARobotActor::ShowcaseStep()
@@ -543,6 +505,7 @@ void ARobotActor::ShowcaseStep()
 		}
 		return;
 	}
+	// pause one tick before reattach, then reattach all
 	if (ShowcaseIndex == ShowcaseOrder.Num())
 	{
 		ShowcaseIndex++;

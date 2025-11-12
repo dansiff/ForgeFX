@@ -19,9 +19,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Orbit") float SpeedDegPerSec =30.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Orbit") float FOV =70.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Orbit") bool bEaseInOutSpeed = true;
+	// Disable continuous spin unless explicitly enabled
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Orbit") bool bAutoOrbit = false;
 
 	UFUNCTION(BlueprintCallable, Category="Orbit") void Setup(AActor* InTarget, float InRadius, float InHeight, float InSpeed);
 	UFUNCTION(BlueprintCallable, Category="Orbit") void UseCircularSplinePath(int32 NumPoints =8);
+	// Manual stepping (positive = clockwise, negative = counter-clockwise)
+	UFUNCTION(BlueprintCallable, Category="Orbit") void StepManual(float DeltaDegrees);
 
 protected:
 	virtual void Tick(float DeltaSeconds) override;

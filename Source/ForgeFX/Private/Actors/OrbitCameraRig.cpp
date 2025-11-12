@@ -37,6 +37,11 @@ void AOrbitCameraRig::UseCircularSplinePath(int32 NumPoints)
 	Spline->UpdateSpline();
 }
 
+void AOrbitCameraRig::StepManual(float DeltaDegrees)
+{
+	AngleDeg = FMath::Fmod(AngleDeg + DeltaDegrees,360.f);
+}
+
 void AOrbitCameraRig::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -44,8 +49,11 @@ void AOrbitCameraRig::Tick(float DeltaSeconds)
 	const FVector Center = T->GetActorLocation();
 	if (bUseSpline && Spline->GetNumberOfSplinePoints() >0)
 	{
-		const float Speed = SpeedDegPerSec/360.f; // cycles per second
-		PathT = FMath::Fmod(PathT + Speed * DeltaSeconds,1.f);
+		if (bAutoOrbit)
+		{
+			const float Speed = SpeedDegPerSec/360.f; // cycles per second
+			PathT = FMath::Fmod(PathT + Speed * DeltaSeconds,1.f);
+		}
 		const float Ln = Spline->GetSplineLength();
 		const FVector Pos = Spline->GetLocationAtDistanceAlongSpline(PathT * Ln, ESplineCoordinateSpace::World);
 		SetActorLocation(Pos);
@@ -53,8 +61,8 @@ void AOrbitCameraRig::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		float DeltaDeg = SpeedDegPerSec * DeltaSeconds;
-		if (bEaseInOutSpeed)
+		float DeltaDeg = bAutoOrbit ? (SpeedDegPerSec * DeltaSeconds) :0.f;
+		if (bAutoOrbit && bEaseInOutSpeed)
 		{
 			const float Tsin = FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
 			DeltaDeg *= FMath::Lerp(0.6f,1.2f, Tsin);

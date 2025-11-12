@@ -7,10 +7,12 @@
 #include "Components/InteractionTraceComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
+#include "GameFramework/PlayerController.h"
 
 ARobotDemoPawn::ARobotDemoPawn()
 {
 	PrimaryActorTick.bCanEverTick = true; // enable tick for raw fallback & smoothing
+	AutoPossessPlayer = EAutoReceiveInput::Player0; // ensure possession in PIE
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
@@ -35,12 +37,23 @@ void ARobotDemoPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		// Force keyboard focus to the game so WASD works without clicking
+		FInputModeGameOnly Mode; PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = false;
+	}
+
 	if (CrosshairWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			CrosshairWidget = CreateWidget<UUserWidget>(PC, CrosshairWidgetClass);
-			if (CrosshairWidget) CrosshairWidget->AddToViewport();
+			if (CrosshairWidget)
+			{
+				CrosshairWidget->AddToViewport();
+				CrosshairWidget->SetIsFocusable(false);
+			}
 		}
 	}
 
