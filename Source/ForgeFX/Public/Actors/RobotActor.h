@@ -113,11 +113,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Robot|Attach") bool bAllowTorsoDrag = true;
 	UPROPERTY(EditAnywhere, Category="Robot|Attach") bool bAllowFreeAttach = true;
 	UPROPERTY(EditAnywhere, Category="Robot|Attach") float FreeAttachMaxDistance =25.f;
-	UPROPERTY(EditAnywhere, Category="Robot|Attach") float DragSmoothingSpeed =12.f;
-	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartDragSmoothingSpeed =14.f;
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float DragSmoothingSpeed =10.f; // slower drag for robot move
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartDragSmoothingSpeed =8.f; // slower drag for parts
 	// Arrow-key nudge while dragging
 	UPROPERTY(EditAnywhere, Category="Robot|Attach") float ArrowNudgeSpeed =150.f; // cm/s
 	FVector DragArrowAccum = FVector::ZeroVector;
+
+	// Skyrim-style grab
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") bool bUseSkyrimGrab = true;
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartGrabDistance =100.f;
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartGrabMinDistance =40.f;
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartGrabMaxDistance =300.f;
+	UPROPERTY(EditAnywhere, Category="Robot|Attach") float PartGrabDistanceStep =10.f;
 
 	UPROPERTY(EditAnywhere, Category="Robot|Scramble") int32 ScrambleIterations =1;
 	UPROPERTY(EditAnywhere, Category="Robot|Scramble") bool bScramblePhysicsEnable = false;

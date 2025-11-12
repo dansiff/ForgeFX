@@ -61,6 +61,8 @@ void UAssemblyBuilderComponent::ClearAssembly()
 	DynamicMIDs.Empty();
 	DetachedParts.Empty();
 	DetachEnabledOverride.Empty();
+	CurrentHoverComp.Reset();
+	SavedMaterials.Empty();
 }
 
 void UAssemblyBuilderComponent::ApplyHighlightScalar(float Value)
@@ -299,4 +301,35 @@ void UAssemblyBuilderComponent::RebuildAssembly()
 bool UAssemblyBuilderComponent::IsDetachEnabled(FName PartName) const
 {
 	return IsDetachableNow(PartName);
+}
+
+void UAssemblyBuilderComponent::ApplyHoverOverride(UPrimitiveComponent* HoveredComp)
+{
+	if (!bUseHoverHighlightMaterial || !HoveredComp || !HoverHighlightMaterial) return;
+	UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(HoveredComp); if (!MeshComp) return;
+	if (CurrentHoverComp.Get() == MeshComp) return;
+	ClearHoverOverride();
+
+	TArray<TObjectPtr<UMaterialInterface>> Originals;
+	Originals.Reserve(MeshComp->GetNumMaterials());
+	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) Originals.Add(MeshComp->GetMaterial(i));
+	SavedMaterials.Add(MeshComp, Originals);
+
+	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) MeshComp->SetMaterial(i, HoverHighlightMaterial);
+	CurrentHoverComp = MeshComp;
+}
+
+void UAssemblyBuilderComponent::ClearHoverOverride()
+{
+	if (!CurrentHoverComp.IsValid()) return;
+	UStaticMeshComponent* MeshComp = CurrentHoverComp.Get();
+	if (TArray<TObjectPtr<UMaterialInterface>>* Originals = SavedMaterials.Find(MeshComp))
+	{
+		for (int32 i=0;i<MeshComp->GetNumMaterials() && i<Originals->Num(); ++i)
+		{
+			MeshComp->SetMaterial(i, (*Originals)[i]);
+		}
+	}
+	CurrentHoverComp.Reset();
+	SavedMaterials.Remove(MeshComp);
 }

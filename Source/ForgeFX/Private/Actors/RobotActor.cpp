@@ -111,11 +111,15 @@ void ARobotActor::Tick(float DeltaSeconds)
 	}
 	if (bDraggingPart && DraggedPartActor)
 	{
-		FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld))
-		{
-			FVector Target = CursorWorld + PartDragOffset + DragArrowAccum;
-			DraggedPartActor->SetActorLocation(FMath::VInterpTo(DraggedPartActor->GetActorLocation(), Target, DeltaSeconds, PartDragSmoothingSpeed));
-		}
+		// Skyrim-style: maintain grab distance along camera forward
+		APlayerController* PC = GetWorld()->GetFirstPlayerController();
+		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		FVector ViewLoc; FRotator ViewRot;
+		if (PC) PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+		const FVector Fwd = ViewRot.Vector();
+		const float TargetDist = FMath::Clamp(PartGrabDistance, PartGrabMinDistance, PartGrabMaxDistance);
+		const FVector DesiredLoc = ViewLoc + Fwd * TargetDist;
+		DraggedPartActor->SetActorLocation(FMath::VInterpTo(DraggedPartActor->GetActorLocation(), DesiredLoc, DeltaSeconds, PartDragSmoothingSpeed));
 	}
 
 	// Visual snap preview indicator
@@ -172,7 +176,7 @@ bool ARobotActor::TrySnapDraggedPartToSocket()
 bool ARobotActor::TryFreeAttachDraggedPart()
 {
 	if (!bAllowFreeAttach || !Assembly || !DraggedPartActor || DraggedPartName.IsNone()) return false;
-	USceneComponent* Parent = nullptr; FName Socket = NAME_None; float Dist=0.f;
+	USceneComponent* Parent = nullptr; FName Socket = NAME_None; float Dist=0.f; // fixed NAME_None
 	if (!Assembly->FindNearestAttachTarget(DraggedPartActor->GetActorLocation(), Parent, Socket, Dist)) return false;
 	const float MaxD = (FreeAttachMaxDistance >0.f) ? FreeAttachMaxDistance : AttachPosTolerance;
 	if (Dist > MaxD) return false;
@@ -185,6 +189,9 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 {
 	if (!Assembly) return;
 
+	// Strong hover: use optional material override if configured
+	Assembly->ClearHoverOverride();
+
 	// Optional: make hover outline obvious via custom depth
 	static TWeakObjectPtr<UPrimitiveComponent> LastHoverOutlineComp;
 	if (LastHoverOutlineComp.IsValid()) { LastHoverOutlineComp->SetRenderCustomDepth(false); }
@@ -194,7 +201,11 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 	{
 		Assembly->ApplyHighlightScalarAll(0.f);
 		HoveredPartName = PartActor->GetPartName();
-		if (UStaticMeshComponent* Comp = PartActor->GetMeshComponent()) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; }
+		if (UStaticMeshComponent* Comp = PartActor->GetMeshComponent())
+		{
+			Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; 
+			Assembly->ApplyHoverOverride(Comp);
+		}
 		return;
 	}
 
@@ -217,7 +228,7 @@ void ARobotActor::OnHoverComponentChanged(UPrimitiveComponent* HitComponent, AAc
 	{
 		TArray<FName> One{ Part }; 
 		Assembly->ApplyHighlightScalarToParts(One,1.f);
-		if (UStaticMeshComponent* Comp = Assembly->GetPartByName(Part)) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; }
+		if (UStaticMeshComponent* Comp = Assembly->GetPartByName(Part)) { Comp->SetRenderCustomDepth(true); LastHoverOutlineComp = Comp; Assembly->ApplyHoverOverride(Comp); }
 	}
 }
 
@@ -252,7 +263,11 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 	// Drag modes
 	if (ARobotPartActor* PartActor = Cast<ARobotPartActor>(HitActor))
 	{
-		DraggedPartActor = PartActor; DraggedPartName = PartActor->GetPartName(); bDraggingPart = true; PartDragPlaneZ = PartActor->GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld)) PartDragOffset = PartActor->GetActorLocation() - CursorWorld; return;
+		DraggedPartActor = PartActor; DraggedPartName = PartActor->GetPartName(); bDraggingPart = true; 
+		// Initialize Skyrim grab distance from current viewpoint
+		APlayerController* PC = GetWorld()->GetFirstPlayerController(); FVector ViewLoc; FRotator ViewRot; if (PC) PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+		PartGrabDistance = FMath::Clamp(FVector::Distance(ViewLoc, PartActor->GetActorLocation()), PartGrabMinDistance, PartGrabMaxDistance);
+		return;
 	}
 	if (!Assembly) { if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("No Assembly in OnInteractPressed")); return; }
 	FName Part;
@@ -262,7 +277,10 @@ void ARobotActor::OnInteractPressed(UPrimitiveComponent* HitComponent, AActor* H
 		{
 			ARobotPartActor* NewPartActor = nullptr; if (Assembly->DetachPart(Part, NewPartActor) && NewPartActor)
 			{
-				DraggedPartActor = NewPartActor; DraggedPartName = Part; PartDragPlaneZ = NewPartActor->GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld)) PartDragOffset = NewPartActor->GetActorLocation() - CursorWorld; bDraggingPart = (DetachMode != EDetachInteractMode::ToggleToDrag) ? true : !bDraggingPart; return;
+				DraggedPartActor = NewPartActor; DraggedPartName = Part; 
+				APlayerController* PC = GetWorld()->GetFirstPlayerController(); FVector ViewLoc; FRotator ViewRot; if (PC) PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+				PartGrabDistance = FMath::Clamp(FVector::Distance(ViewLoc, NewPartActor->GetActorLocation()), PartGrabMinDistance, PartGrabMaxDistance);
+				bDraggingPart = true; return;
 			}
 			else if (bEnableRobotDebugLogs) UE_LOG(LogTemp, Warning, TEXT("Detach failed %s"), *Part.ToString());
 		}
@@ -427,7 +445,9 @@ bool ARobotActor::TryDetachUnderCrosshair(bool bDrag, FName* OutPartName)
 	if (OutPartName) *OutPartName = Part;
 	if (bDrag)
 	{
-		DraggedPartActor = NewActor; DraggedPartName = Part; bDraggingPart = true; PartDragPlaneZ = NewActor->GetActorLocation().Z; FVector CursorWorld; if (ComputeCursorWorldOnPlane(PartDragPlaneZ, CursorWorld)) PartDragOffset = NewActor->GetActorLocation() - CursorWorld; DragArrowAccum = FVector::ZeroVector;
+		DraggedPartActor = NewActor; DraggedPartName = Part; bDraggingPart = true; 
+		APlayerController* PC2 = GetWorld()->GetFirstPlayerController(); FVector ViewLoc; FRotator ViewRot; if (PC2) PC2->GetPlayerViewPoint(ViewLoc, ViewRot);
+		PartGrabDistance = FMath::Clamp(FVector::Distance(ViewLoc, NewActor->GetActorLocation()), PartGrabMinDistance, PartGrabMaxDistance);
 	}
 	return true;
 }
@@ -451,7 +471,17 @@ void ARobotActor::PollFallbackKeys(float DeltaSeconds)
 		if (PC->IsInputKeyDown(EKeys::Period)) { ShowcaseRig->StepManual(+Step); }
 	}
 
-	// Removed E-key path here to avoid double-firing with InteractionTraceComponent
+	// Mouse wheel adjusts grab distance when dragging part
+	if (bDraggingPart)
+	{
+		float Wheel = PC->GetInputAnalogKeyState(EKeys::MouseWheelAxis);
+		if (!FMath::IsNearlyZero(Wheel))
+		{
+			PartGrabDistance = FMath::Clamp(PartGrabDistance + Wheel * PartGrabDistanceStep, PartGrabMinDistance, PartGrabMaxDistance);
+		}
+	}
+
+	// Removed E-key vertical mapping from pawn; Q is used for up
 }
 
 void ARobotActor::StartShowcase()

@@ -49,6 +49,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsDetachable(FName PartName) const;
 	UFUNCTION(Exec) void RebuildAssembly();
 
+	// Optional: strong hover override via material swap
+	UPROPERTY(EditAnywhere, Category="Robot|Highlight") bool bUseHoverHighlightMaterial = false;
+	UPROPERTY(EditAnywhere, Category="Robot|Highlight") TObjectPtr<UMaterialInterface> HoverHighlightMaterial;
+	UFUNCTION(BlueprintCallable, Category="Robot|Highlight") void ApplyHoverOverride(UPrimitiveComponent* HoveredComp);
+	UFUNCTION(BlueprintCallable, Category="Robot|Highlight") void ClearHoverOverride();
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Assembly") TObjectPtr<URobotAssemblyConfig> AssemblyConfig;
 
 	// Highlight smoothing speed (units per second toward target value)
@@ -70,6 +76,10 @@ private:
 	// Highlight interpolation maps
 	TMap<TWeakObjectPtr<UStaticMeshComponent>, float> CurrentHighlight;
 	TMap<TWeakObjectPtr<UStaticMeshComponent>, float> TargetHighlight;
+
+	// Hover material override original cache
+	TWeakObjectPtr<UStaticMeshComponent> CurrentHoverComp;
+	TMap<TWeakObjectPtr<UStaticMeshComponent>, TArray<TObjectPtr<UMaterialInterface>>> SavedMaterials;
 
 	void EnsureDynamicMIDs(UStaticMeshComponent* Comp);
 };
