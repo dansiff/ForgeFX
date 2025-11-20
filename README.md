@@ -1,11 +1,11 @@
-# ForgeFX Robot Assessment
+ï»¿# ForgeFX Robot Assessment
 
 ## TL;DR (Reviewer Quick Scan)
 Play the modular robot demo in UE5.6. Detach, drag, snap, and free-attach any configured part. Multi-select parts (Ctrl+Click) then batch detach (D) or batch reattach (Shift+R). Mouse wheel adjusts drag distance, ESC cancels. R reattaches all. Arm toggles (Y). Scramble randomizes assembly (P). Tests under Automation: search `RobotTests`.
 
 ## Quick Start
 1. Open `ForgeFX.uproject` (UE5.6).
-2. Load `MainDemo` level.
+2. Load `RobotDemoMap` level.
 3. Press Play.
 4. Controls:
  - Movement: WASD + Mouse look, Space Up / Ctrl Down, Shift boost
@@ -86,16 +86,16 @@ RobotActor->ClearSelection();
 ```
 
 ## Automation / Tests
-Run in Automation Tab (PIE active) ? search `RobotTests`:
-- `RobotTests.ArmAttachment` – verifies arm attach/detach cycle.
-- `RobotTests.DetachReattachCycle` – detaches all detachable parts then reattaches.
-- `RobotTests.SelectionBatchDetach` – multi-selection batch detach & reattach.
+Run in Automation Tab (PIE active) â†’ search `RobotTests`:
+- `RobotTests.ArmAttachment` â€“ verifies arm attach/detach cycle.
+- `RobotTests.DetachReattachCycle` â€“ detaches all detachable parts then reattaches.
+- `RobotTests.SelectionBatchDetach` â€“ multi-selection batch detach & reattach.
 (Extendable: add tests for snap tolerance failure then success, multi-attach sequences.)
 
 ## Troubleshooting Guide
 | Issue | Fix |
 |-------|-----|
-| Part won’t detach | Confirm `bDetachable` true and not already detached. |
+| Part wonâ€™t detach | Confirm `bDetachable` true and not already detached. |
 | Snap never triggers | Increase `AttachPosTolerance` / `AttachAngleToleranceDeg`; verify socket exists. |
 | Free attach not working | Ensure `bAllowFreeAttach` true and within `FreeAttachMaxDistance`. |
 | Preview no color change | Assign `ReattachPreviewMaterial` and ensure `SnapColor` parameter exists. |
