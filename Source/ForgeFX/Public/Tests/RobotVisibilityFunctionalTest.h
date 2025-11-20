@@ -1,3 +1,4 @@
+#pragma once
 // Simple functional test to validate visibility toggles for arm parts in PIE.
 // Uses Assembly + Arm configs and runs quickly in editor.
 

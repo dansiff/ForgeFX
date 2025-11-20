@@ -6,6 +6,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "AssemblyBuilderComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRobotPartDetach, FName, PartName, ARobotPartActor*, SpawnedActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRobotPartReattach, FName, PartName);
+
 class UMaterialInstanceDynamic;
 class ARobotPartActor;
 class UInstancedStaticMeshComponent;
@@ -64,6 +67,9 @@ public:
 
 	// Highlight smoothing speed (units per second toward target value)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Robot|Highlight") float HighlightInterpSpeed =12.f;
+
+	UPROPERTY(BlueprintAssignable, Category="Robot|Events") FOnRobotPartDetach OnRobotPartDetach;
+	UPROPERTY(BlueprintAssignable, Category="Robot|Events") FOnRobotPartReattach OnRobotPartReattach;
 
 protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

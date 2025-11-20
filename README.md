@@ -1,111 +1,114 @@
 # ForgeFX Robot Assessment
 
-Quick start (for reviewers)
-- Engine: Unreal Engine5.6
-- Open `ForgeFX.uproject` in the editor.
-- Load `MainDemo` level.
-- Press Play.
-- Controls: WASD move, Mouse look, Space/Ctrl up/down, Shift boost, E press/hold interact (detach/drag), Y toggle arm, P scramble parts.
+## TL;DR (Reviewer Quick Scan)
+Play the modular robot demo in UE5.6. Detach, drag, snap, and free-attach any configured part. Multi-select parts (Ctrl+Click) then batch detach (D) or batch reattach (Shift+R). Mouse wheel adjusts drag distance, ESC cancels. R reattaches all. Arm toggles (Y). Scramble randomizes assembly (P). Tests under Automation: search `RobotTests`.
 
-Enhanced Input (professional mapping)
-Define these actions:
-- `IA_Move` (Axis2D): W(+Y), S(-Y), A(-X), D(+X)
-- `IA_Look` (Axis2D): Mouse X(+X), Mouse Y(+Y or -Y to invert)
-- `IA_UpDown` (Axis1D): Space(+1), LeftCtrl(-1)
-- `IA_Boost` (Trigger): LeftShift (Started/Completed)
-- `IA_Interact` (Trigger): E (Started/Completed) – press begins drag/detach; release finalizes snap/free-attach
-- `IA_InteractAlt` (Trigger): RightMouseButton (Started/Completed) – attempt reattach (snap original, else free attach)
-- `IA_ToggleArm` (Trigger): Y (Started)
-- `IA_Scramble` (Trigger): P (Started)
+## Quick Start
+1. Open `ForgeFX.uproject` (UE5.6).
+2. Load `MainDemo` level.
+3. Press Play.
+4. Controls:
+ - Movement: WASD + Mouse look, Space Up / Ctrl Down, Shift boost
+ - Interact (Detach/Drag/Snap): E (press / release depending on DetachMode)
+ - Multi-select part: Ctrl + Left Click on hovered part
+ - Batch detach selected: D
+ - Batch reattach selected: Shift + R
+ - Reattach all detached parts: R
+ - Toggle arm: Y
+ - Scramble assembly: P
+ - Adjust part drag distance: Mouse Wheel
+ - Cancel active drag: ESC
+ - Attempt quick reattach (alternative flow if bound): Right Mouse (optional IA_InteractAlt)
 
-Apply mapping context:
-- Set `IMC_Demo` on PlayerController (`DefaultInputContext`) or Pawn (`InputContext`).
-- Assign the C++ properties: in placed `ARobotDemoPawn` and `ARobotActor` instances.
+## Interaction Modes & Features
+- Detach Mode (`DetachMode`): HoldToDrag / ToggleToDrag / ClickToggleAttach
+- Hover highlighting: torso hover outlines whole robot; single part hover isolates part.
+- Part detachment: Press E while hovering a detachable component.
+- Dragging: Detached part maintains forward distance (Skyrim-style) adjustable via wheel.
+- Socket snap: Release or click while drag; position + angle within tolerances -> snap.
+- Free attach: If enabled (`bAllowFreeAttach`), release outside snap tolerance but inside range -> attach to nearest socket.
+- Snap readiness feedback: Dynamic preview material pulses and changes color (green ready / red not ready) + socket info widget displays socket name & state.
+- Multi-selection: Ctrl+Click accumulates parts. Use D or Shift+R for batch operations.
+- Batch operations:
+ - D: Detach all selected (ignores already detached)
+ - Shift+R: Reattach selected (only those detached)
+ - R: Reattach all detached (ignores selection)
+- Arm control: Toggle separate arm assembly visibility & state with Y.
+- Scramble: Random detach/reattach pass for detachable parts (configurable iterations, optional physics).
 
-Interaction summary
-- Hover part (crosshair) + E Started: detach (if detachable) and begin drag.
-- E Completed: attempt socket snap; if fail and free-attach enabled, attach to nearest valid target.
-- Y: simple arm attach/detach toggle.
-- P: scramble all detachable parts (random reattachment or nearest socket within radius).
+## UI / Materials Setup
+1. Status Widget (`StatusWidgetClass`): Should contain a `TextBlock` named `StatusText` for prompts/status.
+2. Socket Info Widget (`SocketInfoWidgetClass`): Needs `SocketNameText` and `SnapStateText` `TextBlock` widgets. Appears near the target socket while dragging.
+3. Preview Materials:
+ - `ReattachPreviewMaterial`: Must expose scalar `Pulse` and vector `SnapColor` parameters.
+ - `SelectedPreviewMaterial`: Optional distinct look for selected parts.
+4. Custom Depth / Outline: Ensure meshes allow render custom depth if using outline highlighting.
 
-Full-body modular detachment demo
-- Any part flagged bDetachable in `DA_RobotAssembly` can be pulled off with E.
-- Drag the detached part; release near its original socket to snap/reattach.
-- If release is not close enough and Free Attach is enabled (`bAllowFreeAttach` on `ARobotActor`), part will attach to the nearest socket or component origin (supports experimentation: eyes to arm, jaw to torso side, etc.).
-- Batch enable/disable detachment at runtime: `Assembly.SetDetachEnabledForAll(true/false)` or `SetDetachEnabledForParts([...], true)`.
+## Configuration Asset Workflow
+Open `DA_RobotAssembly`:
+- Mark each part `bDetachable = true` for full modularity.
+- Provide parent part name & socket (add sockets in Mesh Editor if needed).
+- Optional physics: enable on detach via part spec.
+After edits: Rebuild assembly (Play, or re-place actor, or call BuildAssembly).
 
-How to observe each requirement
-1) Camera movement – WASD + mouse + vertical flight.
-2) Highlight whole robot when hovering torso – aim at torso.
-3) Drag torso – hold E on torso (if enabled).
-4) Highlight arm when hovering – aim at arm parts.
-5) Detach arm (and any detachable part) – press E while aiming at part.
-6) Re-attach – drag near socket or free-attach elsewhere.
-7) Status text – add `WBP_ArmStatus` widget.
-8) Unit tests – run automation tests (`ForgeFX.Robot.*`).
+## Key Tunables (on `ARobotActor`)
+- `AttachPosTolerance`: Snap distance to original socket.
+- `AttachAngleToleranceDeg`: Angular snap tolerance.
+- `FreeAttachMaxDistance`: Search radius for free attach.
+- `PartGrabMinDistance` / `PartGrabMaxDistance` / `PartGrabDistanceStep`: Drag distance behavior.
+- `ScrambleIterations` / `ScrambleSocketSearchRadius`: Scramble behavior.
+- `PreviewPulseSpeed`, `SnapReadyColor`, `SnapNotReadyColor`: Visual feedback timing/colors.
 
-
-
-
-Implementation Summary
-- C++ modules and components implement data-driven assembly, highlighting, part promotion/demotion, and free-attach logic.
-
-Detachable Part System (extended)
-- `FRobotPartSpec` includes detachable settings per part (eyes, jaw, hands, legs, feet, thigh, shin, hip, extra torsos).
-- `UAssemblyBuilderComponent` builds components; detaches to `ARobotPartActor`; supports free-attach anywhere.
-- `ARobotActor` handles drag, snap-to-socket, or free-attach fallback.
-
-Editor steps to make every piece detachable
-1) Open `DA_RobotAssembly`.
-2) For each static mesh piece (Eyes, Jaw, Hand_Left, Hand_Right, Upperarm_Left, Upperarm_Right, Lowerarm_Left, Lowerarm_Right, Thigh_Left, Thigh_Right, Shin_Left, Shin_Right, Foot_Left, Foot_Right, Hip, Torso_A, Torso_B, etc.):
- - Set `bDetachable = true`.
- - Optionally set `bSimulatePhysicsWhenDetached = true` if you want it to fall when released.
- - Ensure parent references and sockets exist (add sockets in mesh editor where needed).
-3) Save asset; rebuild robot (reopen level or recompile actor / call BuildAssembly).
-4) In the placed `ARobotActor` instance (or BP_Robot):
- - Enable Free Attach if you want arbitrary reattachment (`bAllowFreeAttach = true`).
- - Adjust `AttachPosTolerance` (snap range to original socket) and `FreeAttachMaxDistance` (range for nearest attach anywhere).
-
-Free-attach behavior
-- Release the dragged part outside original socket tolerance but inside free-attach range -> attaches to nearest socket/origin of any component.
-- Overrides stored so future detaches reattach to the newly chosen parent/socket unless manually changed.
-
-Optional debug (socket indicator)
-Add debug draw snippet to `ARobotActor::Tick` (see detachable section below) to visualize socket proximity (green = snap-ready, red = far).
-
-Runtime API (examples)
-```
-// Globally enable detachment
+## Runtime API Examples
+```cpp
+// Enable all detachable parts
 Assembly->SetDetachEnabledForAll(true);
-// Temporarily disable detachment for eyes
-Assembly->SetDetachEnabledForParts({FName("Eye_Left"), FName("Eye_Right")}, false);
-// Free attach custom logic: after custom drag end
+// Disable specific parts
+Assembly->SetDetachEnabledForParts({ FName("Eye_Left"), FName("Eye_Right") }, false);
+// Programmatically detach for scripted sequence
+ARobotPartActor* OutActor = nullptr; Assembly->DetachPart(FName("Hand_Left"), OutActor);
+// Force free attach search
 USceneComponent* Parent; FName Socket; float Dist;
-if (Assembly->FindNearestAttachTarget(DraggedLoc, Parent, Socket, Dist) && Dist <30.f) {
- Assembly->AttachDetachedPartTo(PartName, PartActor, Parent, Socket);
+if (Assembly->FindNearestAttachTarget(OutActor->GetActorLocation(), Parent, Socket, Dist) && Dist <30.f)
+{
+ Assembly->AttachDetachedPartTo(OutActor->GetPartName(), OutActor, Parent, Socket);
 }
 ```
 
-Scramble feature
-- `ScrambleParts()` detaches all detachable components and reattaches them to random or nearest sockets (iterations configurable; optional physics).
+## Batch Operations
+```cpp
+// C++ detach selected list
+RobotActor->BatchDetachSelected();
+// C++ reattach selected list
+RobotActor->BatchReattachSelected();
+// Clear selection without altering part states
+RobotActor->ClearSelection();
+```
 
-Troubleshooting
-- Missing Detach fields: close editor, full C++ rebuild, reopen asset.
-- Snap fails: increase `AttachPosTolerance` or ensure socket names match.
-- Free attach not working: confirm `bAllowFreeAttach` true and part released within `FreeAttachMaxDistance`.
-- Highlight missing: Material must have `HighlightAmount` scalar; set mode to Material Parameter.
+## Automation / Tests
+Run in Automation Tab (PIE active) ? search `RobotTests`:
+- `RobotTests.ArmAttachment` – verifies arm attach/detach cycle.
+- `RobotTests.DetachReattachCycle` – detaches all detachable parts then reattaches.
+- `RobotTests.SelectionBatchDetach` – multi-selection batch detach & reattach.
+(Extendable: add tests for snap tolerance failure then success, multi-attach sequences.)
 
-Testing additions (recommended)
-- Add functional test: detach random part, move near wrong socket (should free-attach) then near original socket (should snap back).
+## Troubleshooting Guide
+| Issue | Fix |
+|-------|-----|
+| Part won’t detach | Confirm `bDetachable` true and not already detached. |
+| Snap never triggers | Increase `AttachPosTolerance` / `AttachAngleToleranceDeg`; verify socket exists. |
+| Free attach not working | Ensure `bAllowFreeAttach` true and within `FreeAttachMaxDistance`. |
+| Preview no color change | Assign `ReattachPreviewMaterial` and ensure `SnapColor` parameter exists. |
+| Status widget blank | Verify `StatusText` exists and added to viewport. |
+| Automation tests skip | Must have PIE world running (Play in Editor first). |
+
+## Design Rationale (Concise)
+- Separation of concerns: `UAssemblyBuilderComponent` handles structural mapping; `ARobotActor` handles interaction + UI; `ARobotPartActor` isolates detached behavior (physics, highlight).
+- Extensibility: Multi-select and batch operations layered without altering core detach logic.
+- Deterministic snap + flexible free attach for creative recombination demos.
+
+## Extended Summary
+The project demonstrates a fully modular robot assembly: every static mesh component can be detached, dragged with smooth interpolation, reattached to its original socket, or free-attached to any compatible socket based on proximity. Visual feedback (pulse, color, widget) communicates snap readiness. Multi-selection enables batch operations for rapid state changes. Automated tests provide regression coverage for core arm and part lifecycle behaviors. Scrambling showcases dynamic reconfiguration and validates robustness under repeated detach/reattach cycles.
 
 ---
-All parts are now configurable for detachment and arbitrary reattachment, enabling a flexible demonstration of modular assembly.
-
-# ForgeFX Robot Assessment (Updated Interaction)
-
-Left Mouse (E action) – detach / drag (based on DetachMode).
-Right Mouse (Alt action) – attempt reattach (snap original, else free attach).
-
-Add `IA_InteractAlt` (Trigger) mapped to RightMouseButton and assign to `InteractAltAction` on the pawn.
-
-Rest of README content remains below.
+End of README.

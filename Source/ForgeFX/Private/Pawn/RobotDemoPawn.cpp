@@ -151,23 +151,89 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 
 	if (APlayerController* PC = Cast<APlayerController>(Controller))
 	{
-		// Showcase trigger (toggle)
-		if (PC->WasInputKeyJustPressed(EKeys::K) || PC->WasInputKeyJustPressed(EKeys::SpaceBar))
+		// K toggles showcase on the first robot in the world
+		if (PC->WasInputKeyJustPressed(EKeys::K))
 		{
 			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
 			{
-				if (PC->WasInputKeyJustPressed(EKeys::K)) { It->StartShowcase(); }
-				else { It->StopShowcase(); }
+				if (It->IsShowcaseActive()) { It->StopShowcase(); }
+				else { It->StartShowcase(); }
 				break;
 			}
 		}
-		// Raw interact fallback: E to place/snap held part if not handled by Enhanced Input
-		if (bEnableRawInteractFallback && PC->WasInputKeyJustPressed(EKeys::E))
+		// Space also stops showcase (optional convenience)
+		if (PC->WasInputKeyJustPressed(EKeys::SpaceBar))
 		{
-			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StopShowcase(); break; }
+		}
+
+		// New: O triggers cinematic assemble400 units in front of camera
+		if (PC->WasInputKeyJustPressed(EKeys::O))
+		{
+			FVector ViewLoc; FRotator ViewRot; PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+			const FVector Target = ViewLoc + ViewRot.Vector() *400.f;
+			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->TriggerCinematicAssemble(Target); break; }
+		}
+
+		// Raw interact fallback
+		if (bEnableRawInteractFallback)
+		{
+			// Always forward press/release to Interaction regardless of other actions
+			if (PC->WasInputKeyJustPressed(EKeys::E))
 			{
-				It->ForceDropHeldPart(true);
-				break;
+				bool bDropped = false;
+				if (Interaction) { Interaction->InteractPressed(); }
+				// If any robot is currently dragging, drop/snap too
+				for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+				{
+					if (It->IsDraggingPart()) { It->ForceDropHeldPart(true); bDropped = true; break; }
+				}
+				// If nothing dropped and hover missed, try crosshair detach to start drag
+				if (!bDropped)
+				{
+					for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->ForceCrosshairDetach(true); break; }
+				}
+			}
+			if (PC->WasInputKeyJustReleased(EKeys::E))
+			{
+				if (Interaction) { Interaction->InteractReleased(); }
+			}
+			if (PC->WasInputKeyJustPressed(EKeys::F))
+			{
+				if (Interaction) { Interaction->InteractAltPressed(); }
+			}
+			// Mouse buttons fallback (Left = primary interact, Right = alt)
+			if (PC->WasInputKeyJustPressed(EKeys::LeftMouseButton))
+			{
+				bool bDropped = false;
+				if (Interaction) { Interaction->InteractPressed(); }
+				for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+				{
+					if (It->IsDraggingPart()) { It->ForceDropHeldPart(true); bDropped = true; break; }
+				}
+				if (!bDropped)
+				{
+					for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->ForceCrosshairDetach(true); break; }
+				}
+			}
+			if (PC->WasInputKeyJustReleased(EKeys::LeftMouseButton))
+			{
+				if (Interaction) { Interaction->InteractReleased(); }
+			}
+		}
+	}
+
+	// Failsafe: if view target != pawn and not showcasing, restore
+	if (APlayerController* PC2 = Cast<APlayerController>(Controller))
+	{
+		AActor* VT = PC2->GetViewTarget();
+		if (VT != this)
+		{
+			// if no active showcase, force back to pawn and re-enable input
+			PC2->SetIgnoreMoveInput(false); PC2->SetIgnoreLookInput(false);
+			if (!PC2->WasInputKeyJustPressed(EKeys::K))
+			{
+				FViewTargetTransitionParams Blend; Blend.BlendTime =0.1f; PC2->SetViewTarget(this, Blend);
 			}
 		}
 	}

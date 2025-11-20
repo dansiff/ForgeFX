@@ -246,6 +246,7 @@ bool UAssemblyBuilderComponent::DetachPart(FName PartName, ARobotPartActor*& Out
 	Comp->SetComponentTickEnabled(false);
 	Comp->MarkRenderStateDirty();
 	DetachedParts.Add(PartName, OutActor);
+	OnRobotPartDetach.Broadcast(PartName, OutActor);
 	return true;
 }
 
@@ -266,7 +267,8 @@ bool UAssemblyBuilderComponent::ReattachPart(FName PartName, ARobotPartActor* Pa
 	Comp->SetComponentTickEnabled(true);
 	Comp->AttachToComponent(Parent, FAttachmentTransformRules::SnapToTargetIncludingScale, Spec.ParentSocketName);
 	Comp->MarkRenderStateDirty();
-	PartActor->Destroy(); DetachedParts.Remove(PartName); return true;
+	PartActor->Destroy(); DetachedParts.Remove(PartName); OnRobotPartReattach.Broadcast(PartName);
+	return true;
 }
 
 bool UAssemblyBuilderComponent::AttachDetachedPartTo(FName PartName, ARobotPartActor* PartActor, USceneComponent* NewParent, FName SocketName)
@@ -355,4 +357,37 @@ void UAssemblyBuilderComponent::DumpState()
 		const bool bRenderApprox = Comp->IsVisible() && !Comp->bHiddenInGame;
 		UE_LOG(LogTemp, Log, TEXT("Part=%s Visible=%d HiddenInGame=%d RenderApprox=%d Detached=%d"), *P.ToString(), Comp->IsVisible()?1:0, Comp->bHiddenInGame?1:0, bRenderApprox?1:0, bDetached?1:0);
 	}
+}
+
+bool UAssemblyBuilderComponent::IsDetachEnabled(FName PartName) const
+{
+	return IsDetachableNow(PartName);
+}
+
+void UAssemblyBuilderComponent::ApplyHoverOverride(UPrimitiveComponent* HoveredComp)
+{
+	if (!bUseHoverHighlightMaterial || !HoveredComp || !HoverHighlightMaterial) return;
+	UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(HoveredComp); if (!MeshComp) return;
+	if (CurrentHoverComp.Get() == MeshComp) return;
+	ClearHoverOverride();
+	TArray<TObjectPtr<UMaterialInterface>> Originals; Originals.Reserve(MeshComp->GetNumMaterials());
+	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) Originals.Add(MeshComp->GetMaterial(i));
+	SavedMaterials.Add(MeshComp, Originals);
+	for (int32 i=0;i<MeshComp->GetNumMaterials();++i) MeshComp->SetMaterial(i, HoverHighlightMaterial);
+	CurrentHoverComp = MeshComp;
+}
+
+void UAssemblyBuilderComponent::ClearHoverOverride()
+{
+	if (!CurrentHoverComp.IsValid()) return;
+	UStaticMeshComponent* MeshComp = CurrentHoverComp.Get();
+	if (TArray<TObjectPtr<UMaterialInterface>>* Originals = SavedMaterials.Find(MeshComp))
+	{
+		for (int32 i=0;i<MeshComp->GetNumMaterials() && i<Originals->Num(); ++i)
+		{
+			MeshComp->SetMaterial(i, (*Originals)[i]);
+		}
+	}
+	SavedMaterials.Remove(MeshComp);
+	CurrentHoverComp.Reset();
 }
