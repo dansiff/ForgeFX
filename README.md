@@ -3,6 +3,38 @@
 ## TL;DR (Reviewer Quick Scan)
 Play the modular robot demo in UE5.6. Detach, drag, snap, and free-attach any configured part. Multi-select parts (Ctrl+Click) then batch detach (D) or batch reattach (Shift+R). Mouse wheel adjusts drag distance, ESC cancels. R reattaches all. Arm toggles (Y). Scramble randomizes assembly (P). Tests under Automation: search `RobotTests`.
 
+## Opening the Project (Fresh Install / Previously Blueprint-Only Setup)
+If you only ever opened Blueprint projects before, you need the C++ toolchain once. Follow these steps exactly:
+1. Install required Visual Studio components
+ - Launch Visual Studio Installer (or Visual Studio2022 > Tools > Get Tools and Features).
+ - Add the workload: Game development with C++.
+ - Ensure these are included: MSVC (latest), Windows10 or11 SDK (latest), C++ Core build tools. (Optional: C++ CMake tools.)
+2. Get the project with submodules (important if plugins/dependencies are used)
+ - Recommended: git clone --recurse-submodules <repo-url>
+ - If already cloned without them: git submodule update --init --recursive
+3. Match engine version
+ - Confirm UE5.6 is installed via Epic Games Launcher (must match the value in ForgeFX.uproject EngineAssociation).
+4. Generate project files
+ - In Explorer, right-click ForgeFX.uproject > Switch Unreal Engine version… (choose5.6 if prompted).
+ - Right-click again > Generate Visual Studio project files.
+ - If those menu items are missing, open Unreal Engine once; UnrealVersionSelector will register them.
+5. First open & build
+ - Double-click ForgeFX.uproject. When asked to build missing modules, click Yes and wait.
+ - If the build dialog fails, open the generated .sln in Visual Studio and Build Solution (Configuration: Development Editor, Platform: x64). When it succeeds, close VS and open the .uproject again.
+6. Quick troubleshooting if it won’t launch
+ - Version mismatch: Repeat Switch Unreal Engine version then regenerate project files.
+ - Build errors / missing modules: Close UE & VS; delete .vs, Binaries, Intermediate, DerivedDataCache folders; regenerate and build again.
+ - Missing plugins (error references a plugin): Temporarily disable it in ForgeFX.uproject (set Enabled: false) then regenerate.
+ - Submodules absent: Run git submodule update --init --recursive.
+7. After this initial setup you can open the project normally by double-clicking ForgeFX.uproject; future blueprint-only edits do not require manual builds unless C++ changes occur.
+
+Minimal checklist to send to a tester:
+- UE5.6 installed
+- VS2022 Game development with C++ workload installed
+- Repo cloned with submodules
+- Generated project files via context menu
+- First launch modules built successfully
+
 ## Quick Start
 1. Open `ForgeFX.uproject` (UE5.6).
 2. Load `RobotDemoMap` level.
