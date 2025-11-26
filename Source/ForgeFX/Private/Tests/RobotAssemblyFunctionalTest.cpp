@@ -31,7 +31,7 @@ bool FRobotAssemblyFunctionalTest::RunTest(const FString& Parameters)
 	}
 
 	ARobotActor* Robot = nullptr;
-	for (TActorIterator<ARobotActor> It(World); It; ++It) { Robot = *It; break; }
+	for (ARobotActor* R : TActorRange<ARobotActor>(World)) { Robot = R; break; }
 	if (!Robot)
 	{
 		AddError(TEXT("Robot actor not found in test world."));
@@ -81,9 +81,9 @@ bool FRobotAssemblyFunctionalTest::RunTest(const FString& Parameters)
 		if (!Assembly->IsPartDetached(P)) continue; // skip if failure earlier
 		// find actor
 		ARobotPartActor* PartActor = nullptr;
-		for (TActorIterator<ARobotPartActor> It(World); It; ++It)
+		for (ARobotPartActor* Part : TActorRange<ARobotPartActor>(World))
 		{
-			if (It->GetPartName() == P) { PartActor = *It; break; }
+			if (Part->GetPartName() == P) { PartActor = Part; break; }
 		}
 		const bool bReattached = PartActor && Assembly->ReattachPart(P, PartActor);
 		TestTrue(FString::Printf(TEXT("Reattach %s"), *P.ToString()), bReattached);

@@ -35,10 +35,16 @@ private:
 	UAssemblyBuilderComponent* GetAssembly() const;
 	bool TrySnapDragged(float AttachPosTolerance, float AttachAngleToleranceDeg);
 	bool TryFreeAttachDragged(bool bAllowFreeAttach, float FreeAttachMaxDistance, float AttachPosTolerance);
+	void ClearDragState();
 
 private:
 	UPROPERTY(Transient) TObjectPtr<ARobotPartActor> DraggedPartActor;
 	UPROPERTY(Transient) FName DraggedPartName;
+	// Group-drag support
+	UPROPERTY(Transient) TArray<TObjectPtr<ARobotPartActor>> GroupChildActors;
+	UPROPERTY(Transient) TArray<FName> GroupChildNames;
+	UPROPERTY(Transient) TArray<FVector> GroupChildOffsets;
+	UPROPERTY(Transient) TArray<FQuat> GroupChildRotOffsets;
 	bool bDraggingPart = false;
 	float PartGrabDistance =100.f;
 };

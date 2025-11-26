@@ -2,12 +2,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Interfaces/Interactable.h"
-#include "InputAction.h"
-#include "InputMappingContext.h"
 #include "Components/RobotArmComponent.h"
 #include "RobotActor.generated.h"
 
-class UPrimitiveComponent; class UUserWidget; class UTextBlock; class ARobotPartActor; class UInteractionTraceComponent; class USphereComponent; class UHighlightComponent; class UAssemblyBuilderComponent; class UCinematicAssembleComponent; class UPartInteractionComponent; class URobotShowcaseComponent; class AOrbitCameraRig;
+class UPrimitiveComponent; class UUserWidget; class UTextBlock; class ARobotPartActor; class UInteractionTraceComponent; class USphereComponent; class UHighlightComponent; class UAssemblyBuilderComponent; class UCinematicAssembleComponent; class UPartInteractionComponent; class URobotShowcaseComponent; class AOrbitCameraRig; class UInputAction; class UInputMappingContext;
 
 UENUM(BlueprintType)
 enum class EDetachInteractMode : uint8 { HoldToDrag, ToggleToDrag, ClickToggleAttach };

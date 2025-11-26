@@ -40,7 +40,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool FindPartNameByComponent(const UPrimitiveComponent* Comp, FName& OutName) const;
 
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPart(FName PartName, ARobotPartActor*& OutActor);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool DetachPartWithChildren(FName PartName, ARobotPartActor*& OutRootActor, TArray<ARobotPartActor*>& OutChildActors);
 	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPart(FName PartName, ARobotPartActor* PartActor);
+	UFUNCTION(BlueprintCallable, Category="Robot|Assembly") bool ReattachPartsGroup(const TArray<FName>& PartNames, const TArray<ARobotPartActor*>& Actors); // expects root first OR handles ordering internally
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool IsPartDetached(FName PartName) const { return DetachedParts.Contains(PartName); }
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetPartSpec(FName PartName, FRobotPartSpec& OutSpec) const;
 	UFUNCTION(BlueprintPure, Category="Robot|Assembly") bool GetAttachParentAndSocket(FName PartName, USceneComponent*& OutParent, FName& OutSocket) const;
@@ -74,6 +76,8 @@ public:
 protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	bool IsDetachableNow(FName PartName) const;
+	void GetChildrenRecursive(FName ParentPart, TArray<FName>& OutChildren) const;
+	bool CreatesCycle(USceneComponent* PotentialParent, UStaticMeshComponent* Child) const;
 
 private:
 	UPROPERTY(Transient) TMap<FName, TObjectPtr<UStaticMeshComponent>> NameToComponent;

@@ -326,6 +326,41 @@ bool UAssemblyBuilderComponent::IsDetachable(FName PartName) const
 	return IsDetachableNow(PartName);
 }
 
+void UAssemblyBuilderComponent::GetChildrenRecursive(FName ParentPart, TArray<FName>& OutChildren) const
+{
+	if (!AssemblyConfig) return;
+	for (const FRobotPartSpec& Spec : AssemblyConfig->Parts)
+	{
+		if (Spec.ParentPartName == ParentPart)
+		{
+			OutChildren.Add(Spec.PartName);
+			GetChildrenRecursive(Spec.PartName, OutChildren);
+		}
+	}
+}
+
+bool UAssemblyBuilderComponent::DetachPartWithChildren(FName PartName, ARobotPartActor*& OutRootActor, TArray<ARobotPartActor*>& OutChildActors)
+{
+	OutRootActor = nullptr; OutChildActors.Reset();
+	if (!AssemblyConfig) return false;
+	// Detach the root first
+	if (!DetachPart(PartName, OutRootActor) || !OutRootActor) return false;
+	// Gather children and detach them as well
+	TArray<FName> Children; GetChildrenRecursive(PartName, Children);
+	for (const FName Child : Children)
+	{
+		if (IsDetachableNow(Child) && !IsPartDetached(Child))
+		{
+			ARobotPartActor* ChildActor = nullptr;
+			if (DetachPart(Child, ChildActor) && ChildActor)
+			{
+				OutChildActors.Add(ChildActor);
+			}
+		}
+	}
+	return true;
+}
+
 void UAssemblyBuilderComponent::RebuildAssembly()
 {
 	UE_LOG(LogTemp, Log, TEXT("AssemblyBuilder: RebuildAssembly invoked"));
@@ -390,4 +425,38 @@ void UAssemblyBuilderComponent::ClearHoverOverride()
 	}
 	SavedMaterials.Remove(MeshComp);
 	CurrentHoverComp.Reset();
+}
+
+bool UAssemblyBuilderComponent::CreatesCycle(USceneComponent* PotentialParent, UStaticMeshComponent* Child) const
+{
+	if (!PotentialParent || !Child) return false;
+	USceneComponent* Iter = PotentialParent;
+	while (Iter)
+	{
+		if (Iter == Child) return true; // cycle
+		Iter = Iter->GetAttachParent();
+	}
+	return false;
+}
+
+bool UAssemblyBuilderComponent::ReattachPartsGroup(const TArray<FName>& PartNames, const TArray<ARobotPartActor*>& Actors)
+{
+	if (PartNames.Num() != Actors.Num()) return false;
+	// First reattach root then children in order; skip if not detached
+	for (int32 i=0;i<PartNames.Num();++i)
+	{
+		const FName P = PartNames[i]; ARobotPartActor* A = Actors[i]; if (!A) continue;
+		if (!IsPartDetached(P)) continue;
+		UStaticMeshComponent* Comp = GetPartByName(P); if (!Comp) continue;
+		FRobotPartSpec Spec; if (!GetPartSpec(P, Spec)) continue;
+		USceneComponent* Parent = nullptr; if (Spec.ParentPartName.IsNone()) Parent = GetOwner()->GetRootComponent(); else if (TObjectPtr<UStaticMeshComponent>* Found = NameToComponent.Find(Spec.ParentPartName)) Parent = Found->Get();
+		if (!Parent) Parent = GetOwner()->GetRootComponent();
+		if (Parent == Comp || CreatesCycle(Parent, Comp)) Parent = GetOwner()->GetRootComponent();
+		// restore
+		Comp->SetHiddenInGame(false); Comp->SetVisibility(true, true); Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly); Comp->SetCastShadow(true); Comp->SetReceivesDecals(true); Comp->SetComponentTickEnabled(true);
+		Comp->AttachToComponent(Parent, FAttachmentTransformRules::SnapToTargetIncludingScale, Spec.ParentSocketName);
+		Comp->MarkRenderStateDirty();
+		A->Destroy(); DetachedParts.Remove(P); OnRobotPartReattach.Broadcast(P);
+	}
+	return true;
 }

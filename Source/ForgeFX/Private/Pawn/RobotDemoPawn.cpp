@@ -46,12 +46,12 @@ void ARobotDemoPawn::BeginPlay()
 		PC->bShowMouseCursor = false;
 	}
 
-	if (CrosshairWidgetClass)
+	if (CrosshairWidgetClass != nullptr)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			CrosshairWidget = CreateWidget<UUserWidget>(PC, CrosshairWidgetClass);
-			if (CrosshairWidget)
+			if (CrosshairWidget != nullptr)
 			{
 				CrosshairWidget->AddToViewport();
 				CrosshairWidget->SetIsFocusable(false);
@@ -65,7 +65,7 @@ void ARobotDemoPawn::BeginPlay()
 		{
 			if (UEnhancedInputLocalPlayerSubsystem* Subsys = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LP))
 			{
-				if (InputContext)
+				if (InputContext != nullptr)
 				{
 					Subsys->AddMappingContext(InputContext, MappingPriority);
 				}
@@ -79,12 +79,12 @@ void ARobotDemoPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		if (MoveAction) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
-		if (LookAction) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
-		if (UpDownAction) EIC->BindAction(UpDownAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::UpDown);
-		if (BoostAction) { EIC->BindAction(BoostAction, ETriggerEvent::Started, this, &ARobotDemoPawn::BoostOn); EIC->BindAction(BoostAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::BoostOff); }
-		if (InteractAction) { EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractPress); EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::InteractRelease); }
-		if (InteractAltAction) { EIC->BindAction(InteractAltAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractAltPress); }
+		if (MoveAction != nullptr) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Move);
+		if (LookAction != nullptr) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::Look);
+		if (UpDownAction != nullptr) EIC->BindAction(UpDownAction, ETriggerEvent::Triggered, this, &ARobotDemoPawn::UpDown);
+		if (BoostAction != nullptr) { EIC->BindAction(BoostAction, ETriggerEvent::Started, this, &ARobotDemoPawn::BoostOn); EIC->BindAction(BoostAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::BoostOff); }
+		if (InteractAction != nullptr) { EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractPress); EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &ARobotDemoPawn::InteractRelease); }
+		if (InteractAltAction != nullptr) { EIC->BindAction(InteractAltAction, ETriggerEvent::Started, this, &ARobotDemoPawn::InteractAltPress); }
 	}
 }
 
@@ -121,17 +121,17 @@ void ARobotDemoPawn::BoostOff(const FInputActionValue&)
 
 void ARobotDemoPawn::InteractPress(const FInputActionValue& Value)
 {
-	if (Interaction) Interaction->InteractPressed();
+	if (Interaction != nullptr) Interaction->InteractPressed();
 }
 
 void ARobotDemoPawn::InteractRelease(const FInputActionValue& Value)
 {
-	if (Interaction) Interaction->InteractReleased();
+	if (Interaction != nullptr) Interaction->InteractReleased();
 }
 
 void ARobotDemoPawn::InteractAltPress(const FInputActionValue& Value)
 {
-	if (Interaction) Interaction->InteractAltPressed();
+	if (Interaction != nullptr) Interaction->InteractAltPressed();
 }
 
 void ARobotDemoPawn::UpDown(const FInputActionValue& Value)
@@ -154,17 +154,17 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 		// K toggles showcase on the first robot in the world
 		if (PC->WasInputKeyJustPressed(EKeys::K))
 		{
-			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+			for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld()))
 			{
-				if (It->IsShowcaseActive()) { It->StopShowcase(); }
-				else { It->StartShowcase(); }
+				if (Robot->IsShowcaseActive()) { Robot->StopShowcase(); }
+				else { Robot->StartShowcase(); }
 				break;
 			}
 		}
 		// Space also stops showcase (optional convenience)
 		if (PC->WasInputKeyJustPressed(EKeys::SpaceBar))
 		{
-			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StopShowcase(); break; }
+			for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->StopShowcase(); break; }
 		}
 
 		// New: O triggers cinematic assemble400 units in front of camera
@@ -172,7 +172,7 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 		{
 			FVector ViewLoc; FRotator ViewRot; PC->GetPlayerViewPoint(ViewLoc, ViewRot);
 			const FVector Target = ViewLoc + ViewRot.Vector() *400.f;
-			for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->TriggerCinematicAssemble(Target); break; }
+			for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->TriggerCinematicAssemble(Target); break; }
 		}
 
 		// Raw interact fallback
@@ -182,43 +182,43 @@ void ARobotDemoPawn::Tick(float DeltaSeconds)
 			if (PC->WasInputKeyJustPressed(EKeys::E))
 			{
 				bool bDropped = false;
-				if (Interaction) { Interaction->InteractPressed(); }
+				if (Interaction != nullptr) { Interaction->InteractPressed(); }
 				// If any robot is currently dragging, drop/snap too
-				for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+				for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld()))
 				{
-					if (It->IsDraggingPart()) { It->ForceDropHeldPart(true); bDropped = true; break; }
+					if (Robot->IsDraggingPart()) { Robot->ForceDropHeldPart(true); bDropped = true; break; }
 				}
 				// If nothing dropped and hover missed, try crosshair detach to start drag
 				if (!bDropped)
 				{
-					for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->ForceCrosshairDetach(true); break; }
+					for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->ForceCrosshairDetach(true); break; }
 				}
 			}
 			if (PC->WasInputKeyJustReleased(EKeys::E))
 			{
-				if (Interaction) { Interaction->InteractReleased(); }
+				if (Interaction != nullptr) { Interaction->InteractReleased(); }
 			}
 			if (PC->WasInputKeyJustPressed(EKeys::F))
 			{
-				if (Interaction) { Interaction->InteractAltPressed(); }
+				if (Interaction != nullptr) { Interaction->InteractAltPressed(); }
 			}
 			// Mouse buttons fallback (Left = primary interact, Right = alt)
 			if (PC->WasInputKeyJustPressed(EKeys::LeftMouseButton))
 			{
 				bool bDropped = false;
-				if (Interaction) { Interaction->InteractPressed(); }
-				for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It)
+				if (Interaction != nullptr) { Interaction->InteractPressed(); }
+				for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld()))
 				{
-					if (It->IsDraggingPart()) { It->ForceDropHeldPart(true); bDropped = true; break; }
+					if (Robot->IsDraggingPart()) { Robot->ForceDropHeldPart(true); bDropped = true; break; }
 				}
 				if (!bDropped)
 				{
-					for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->ForceCrosshairDetach(true); break; }
+					for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->ForceCrosshairDetach(true); break; }
 				}
 			}
 			if (PC->WasInputKeyJustReleased(EKeys::LeftMouseButton))
 			{
-				if (Interaction) { Interaction->InteractReleased(); }
+				if (Interaction != nullptr) { Interaction->InteractReleased(); }
 			}
 		}
 	}
@@ -277,17 +277,17 @@ void ARobotDemoPawn::PollRawMovementKeys(float DeltaSeconds)
 
 void ARobotDemoPawn::DumpAssemblyStateAll()
 {
-	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->DumpAssemblyState(); }
+	for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->DumpAssemblyState(); }
 }
 void ARobotDemoPawn::EnforceHideForDetachedAll()
 {
-	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->EnforceHideForDetached(); }
+	for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->EnforceHideForDetached(); }
 }
 void ARobotDemoPawn::StartShowcaseAll()
 {
-	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StartShowcase(); }
+	for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->StartShowcase(); }
 }
 void ARobotDemoPawn::StopShowcaseAll()
 {
-	for (TActorIterator<ARobotActor> It(GetWorld()); It; ++It) { It->StopShowcase(); }
+	for (ARobotActor* Robot : TActorRange<ARobotActor>(GetWorld())) { Robot->StopShowcase(); }
 }

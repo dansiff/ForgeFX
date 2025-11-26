@@ -8,8 +8,8 @@ public class ForgeFX : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "InputCore", "EnhancedInput", "UMG", "Niagara", "Slate", "SlateCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "EnhancedInput", "Niagara" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "InputCore", "UMG", "Slate", "SlateCore" });
 
 		if (Target.bBuildEditor)
 		{

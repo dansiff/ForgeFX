@@ -2,8 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "NiagaraSystem.h"
 #include "RobotArmConfig.generated.h"
+
+class UNiagaraSystem;
 
 UCLASS(BlueprintType)
 class FORGEFX_API URobotArmConfig : public UDataAsset

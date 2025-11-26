@@ -5,30 +5,51 @@
 
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
-#include "Tests/AutomationEditorCommon.h"
-#include "GameFramework/Actor.h"
+#if WITH_EDITOR
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Components/RobotArmComponent.h"
 #include "Components/HighlightComponent.h"
+#include "Editor.h"
+#include "Engine/Engine.h"
+#endif
 
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 
+static UWorld* GetEditorTestWorld()
+{
+	if (GEditor)
+	{
+		if (UWorld* World = GEditor->GetEditorWorldContext().World())
+		{
+			return World;
+		}
+	}
+	// Fallback: PIE world search
+	if (GEngine)
+	{
+		for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+		{
+			if (Ctx.WorldType == EWorldType::PIE && Ctx.World()) return Ctx.World();
+		}
+	}
+	return nullptr;
+}
+
 static AActor* SpawnTestActor(UWorld* World)
 {
-	FActorSpawnParameters Params;
-	Params.ObjectFlags = RF_Transient;
-	return World->SpawnActor<AActor>(Params);
+	FActorSpawnParameters Params; Params.ObjectFlags = RF_Transient; return World->SpawnActor<AActor>(Params);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAttachToggleTest, "ForgeFX.Robot.AttachTest", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FAttachToggleTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
+	UWorld* World = GetEditorTestWorld();
 	TestNotNull(TEXT("World valid"), World);
+	if (!World) return false;
 	AActor* Actor = SpawnTestActor(World);
 	URobotArmComponent* Arm = NewObject<URobotArmComponent>(Actor);
-	Actor->AddInstanceComponent(Arm);
-	Arm->RegisterComponent();
+	Actor->AddInstanceComponent(Arm); Arm->RegisterComponent();
 
 	TestTrue(TEXT("Initially attached"), Arm->IsAttached());
 	Arm->DetachFromRobot();
@@ -41,11 +62,10 @@ bool FAttachToggleTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHighlightHoverTest, "ForgeFX.Robot.HighlightHoverTest", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FHighlightHoverTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
+	UWorld* World = GetEditorTestWorld(); if (!World) return false;
 	AActor* Actor = SpawnTestActor(World);
 	UHighlightComponent* Highlight = NewObject<UHighlightComponent>(Actor);
-	Actor->AddInstanceComponent(Highlight);
-	Highlight->RegisterComponent();
+	Actor->AddInstanceComponent(Highlight); Highlight->RegisterComponent();
 
 	TestFalse(TEXT("Default not highlighted"), Highlight->IsHighlighted());
 	Highlight->SetHighlighted(true);
@@ -59,11 +79,10 @@ bool FHighlightHoverTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDetachMustFlipStateTest, "ForgeFX.Robot.DetachMustFlipState", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FDetachMustFlipStateTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
+	UWorld* World = GetEditorTestWorld(); if (!World) return false;
 	AActor* Actor = SpawnTestActor(World);
 	URobotArmComponent* Arm = NewObject<URobotArmComponent>(Actor);
-	Actor->AddInstanceComponent(Arm);
-	Arm->RegisterComponent();
+	Actor->AddInstanceComponent(Arm); Arm->RegisterComponent();
 
 	TestTrue(TEXT("Precondition: starts attached"), Arm->IsAttached());
 	Arm->DetachFromRobot();
